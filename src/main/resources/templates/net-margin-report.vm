@@ -1,0 +1,348 @@
+## net-margin-report.vm
+## Context:
+##  - $order                : com.sybyl.trace.order.Order
+##  - $marginReports        : java.util.List<com.sybyl.trace.order.margin.MarginReport>
+##  - $additionalExpenses   : java.util.List<com.sybyl.trace.order.expense.AdditionalExpense>
+
+<html>
+<head>
+    <title>Net Margin Report - Trace Kenya</title>
+
+    <style>
+        body {
+            background-color:#E7E4E4;
+            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+            font-size: 12px;
+        }
+
+        .container {
+            background-color:white;
+            width: 900px;
+            margin: 0 auto;
+            padding: 10px 20px 30px 20px;
+        }
+
+        h1, h2, h3 {
+            font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+            margin: 8px 0;
+        }
+
+        #sectionTitle {
+            background-color:#9E9B9B;
+            color:white;
+            height:80px;
+            text-align:center;
+            vertical-align:middle;
+        }
+
+        #tasks {
+          border-collapse: collapse;
+          width: 100%;
+          font-size:12px;
+        }
+
+        #tasks td, #tasks th {
+          border: 1px solid #ddd;
+          padding: 5px;
+        }
+
+        #tasks th {
+          padding-top: 8px;
+          padding-bottom: 8px;
+          text-align: left;
+          background-color: #DCDCDC;
+        }
+
+        #appStatus {
+          border-collapse: collapse;
+          width: 100%;
+          font-size: 11px;
+        }
+
+        #appStatus td, #appStatus th {
+          border: 1px solid #ddd;
+          padding: 4px 5px;
+        }
+
+        #appStatus th {
+          padding-top: 6px;
+          padding-bottom: 6px;
+          text-align: left;
+          background-color: #DCDCDC;
+        }
+
+        .vert-header {
+            background-color: #AEDFE0;
+            text-align:center;
+            font-weight:bold;
+        }
+
+        .highlight {
+            background-color: #ffec6f;
+        }
+
+        .section-caption {
+            font-size: 14px;
+            font-weight:bold;
+            margin-top: 18px;
+            margin-bottom: 4px;
+        }
+
+        .small-muted {
+            font-size: 11px;
+            color: #666666;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+
+    ## --------------------------------------------------------------
+    ## Header
+    ## --------------------------------------------------------------
+    <table style="width:100%;">
+        <tr>
+            <th id="sectionTitle">
+                <div style="font-size:22px;">Net Margin Report - Trace Kenya</div>
+                <div style="font-size:13px; margin-top:4px;">
+                    Order ID: $order.salesOrderId,
+                    Customer: $order.customer.name,
+                    Description:  $!order.description
+
+                    <br/>
+                    Location: $order.location.label()
+                </div>
+            </th>
+        </tr>
+    </table>
+
+    #set($totalMarginUsd = 0.0)
+    #set($totalApprovedAddExpUsd = 0.0)
+
+    ## --------------------------------------------------------------
+    ## Margin Reports by Vertical
+    ## --------------------------------------------------------------
+    <div class="section-caption">1. Margin Reports by Vertical</div>
+
+    #if($marginReports && !$marginReports.isEmpty())
+        #foreach($report in $marginReports)
+            #set($marginUsd = $!report.marginAmountUsdRounded)
+            #if($marginUsd)
+                #set($totalMarginUsd = $totalMarginUsd + $marginUsd)
+            #end
+
+            <table style="width:100%; margin-top:12px;">
+                <tr>
+                    <th class="vert-header" height="30">
+                        $report.vertical.name
+                    </th>
+                </tr>
+                <tr>
+                    <td>
+
+                        <table id="tasks">
+                            <tr>
+                                <th>Buying Price (Total Landed)</th>
+                                <td>
+                                    $fmtMoney.format($report.buyingPrice) $report.buyingCurrency
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Selling Price (Total PO Value)</th>
+                                <td>
+                                    $fmtMoney.format($report.sellingPrice) $report.sellingCurrency
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Conversion Rate</th>
+                                <td>$fmtMoney.format($report.conversionRate)</td>
+                            </tr>
+                            <tr>
+                                <th class="highlight"><b>Gross Margin in USD</b></th>
+                                <td class="highlight">
+                                    $fmtMoney.format($!marginUsd)
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Approval Status</th>
+                                <td>$report.approvalStatus</td>
+                            </tr>
+                            <tr>
+                                <th>Uploaded By / On</th>
+                                <td>
+                                    $!report.uploadedBy.fullName
+                                    <span class="small-muted">
+                                          ($fmtDate.format($report.uploadedOn))
+                                    </span>
+                                </td>
+                            </tr>
+                            #if($report.comments)
+                                <tr>
+                                    <th>Comments</th>
+                                    <td>$report.comments</td>
+                                </tr>
+                            #end
+                        </table>
+
+                    </td>
+                </tr>
+            </table>
+
+            ## ---- Margin Audit Trail ----
+            <div style="margin-top:4px;">
+                <b>Audit Trail (Margin Approval)</b>
+            </div>
+
+#set($auditList = $!report.audits)
+
+#if(!$auditList || $auditList.size() == 0)
+    <div class="small-muted">No audit records.</div>
+#else
+    <table id="appStatus" style="margin-top:4px;">
+        <tr>
+            <th>User</th>
+            <th>Status</th>
+            <th>Date / Time</th>
+            <th>Comments</th>
+        </tr>
+        #foreach($a in $auditList)
+            <tr>
+                <td>
+                    #if($a.actor)
+                        $!a.actor.firstName $!a.actor.lastName
+                    #else
+                        $!a.actorId
+                    #end
+                </td>
+                <td>$a.action</td>
+                <td>
+                    #if($a.actedOn)
+                        $fmtDate.format($a.actedOn)
+                    #end
+                </td>
+                <td>$!a.note</td>
+            </tr>
+        #end
+    </table>
+#end
+
+
+            ## ---- Additional Expenses for this vertical ----
+            #set($hasExpForVert = false)
+            #foreach($exp in $additionalExpenses)
+                #if($exp.vertical.id == $report.vertical.id && $exp.approvalStatus == "CFO_APPROVED")
+                    #set($hasExpForVert = true)
+                #end
+            #end
+
+            #if($hasExpForVert)
+                <div style="margin-top:10px;"><b>Additional Expenses for $report.vertical.name</b></div>
+
+            <table id="tasks">
+    <tr>
+        <th>Description</th>
+        <th>Amount</th>
+        <th>Conversion Rate</th>
+        <th>Amount (USD)</th>
+        <th>Status</th>
+    </tr>
+
+    #foreach($exp in $additionalExpenses)
+        #if($exp.vertical.id == $report.vertical.id && $exp.approvalStatus == "CFO_APPROVED")
+            #set($expUsd = $exp.amountUsd)
+            #if($expUsd)
+                #set($totalApprovedAddExpUsd = $totalApprovedAddExpUsd + $expUsd)
+            #end
+
+            <tr>
+                <td>$exp.label.name</td>
+                <td>$fmtMoney.format($exp.amount) $exp.currency</td>
+                <td>$fmtMoney.format($exp.conversionRate)</td>
+                <td>$fmtMoney.format($expUsd)</td>
+                <td>$exp.approvalStatus</td>
+            </tr>
+        #end
+    #end
+</table>
+
+
+                ## Expense audit trail for each approved expense
+#foreach($exp in $additionalExpenses)
+    #if($exp.vertical.id == $report.vertical.id && $exp.approvalStatus == "CFO_APPROVED")
+        <div style="margin-top:4px;">
+            <b>Additional Expense Audit - $exp.label.name</b>
+        </div>
+
+        #set($auditList = $!exp.audits)
+
+        #if(!$auditList || $auditList.size() == 0)
+            <div class="small-muted">No audit records.</div>
+        #else
+            <table id="appStatus">
+                <tr>
+                    <th>User</th>
+                    <th>Action</th>
+                    <th>Date / Time</th>
+                    <th>Note</th>
+                </tr>
+                #foreach($ea in $auditList)
+                    <tr>
+                        <td>
+                            #if($ea.actor)
+                                $!ea.actor.firstName $!ea.actor.lastName
+                            #else
+                                (unknown)
+                            #end
+                        </td>
+                        <td>$ea.action</td>
+                        <td> #if($ea.actedOn)
+                                $fmtDate.format($ea.actedOn)
+                            #end</td>
+                        <td>$!ea.note</td>
+                    </tr>
+                #end
+            </table>
+        #end
+    #end
+#end
+
+            #end
+
+            <hr style="margin:15px 0; border:0; border-top:1px dashed #999;" />
+        #end
+    #else
+        <div class="small-muted">No margin reports found for this order.</div>
+    #end
+
+    ## --------------------------------------------------------------
+    ## 2. Summary Before Collections
+    ## --------------------------------------------------------------
+    <div class="section-caption">2. Summary</div>
+
+    #set($netMarginBefore = $totalMarginUsd - $totalApprovedAddExpUsd)
+
+    <table id="tasks" style="margin-top:6px;">
+        <tr>
+            <th>Total Gross Margin in USD (All Verticals)</th>
+            <td class="text-right">$fmtMoney.format($totalMarginUsd)</td>
+        </tr>
+        <tr>
+            <th>Total Approved Additional Expenses in USD</th>
+            <td class="text-right">$fmtMoney.format($totalApprovedAddExpUsd)</td>
+        </tr>
+        <tr>
+            <th class="highlight"><b>Net Margin in USD</b></th>
+            <td class="highlight text-right">$fmtMoney.format($netMarginBefore)</td>
+        </tr>
+    </table>
+
+    
+
+</div>
+</body>
+</html>
