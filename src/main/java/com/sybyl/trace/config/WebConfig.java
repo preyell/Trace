@@ -9,7 +9,6 @@ public class WebConfig implements WebMvcConfigurer {
 
   @Override
   public void addViewControllers(ViewControllerRegistry registry) {
-    // Map "/login" to the JSP without a controller method
     registry.addViewController("/login").setViewName("login");
   }
 }

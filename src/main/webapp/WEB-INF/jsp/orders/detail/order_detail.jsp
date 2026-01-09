@@ -1,13 +1,14 @@
 <%@ include file="/WEB-INF/jsp/common/taglibs.jsp"%>
+<%@ taglib prefix="fmt" uri="http://java.sun.com/jsp/jstl/fmt"%>
 
-<!-- Optional page-scoped polish -->
 <style>
-  .order-meta .meta-item { min-width: 160px; }
-  .order-meta .meta-item .label { font-size: .75rem; color: #6c757d; }
-  .order-meta .meta-item .value { font-weight: 600; }
+  /* Compact details bar styles */
+  .details-bar .small { font-size: 0.75rem; }
+  .details-bar strong { font-size: 0.85rem; }
+  .details-bar { font-size: 0.85rem; }
+
   .nav-tabs .nav-link { padding: .5rem 1rem; }
   .nav-tabs .nav-link.active { font-weight: 600; }
-  .section-title { font-size: 1rem; font-weight: 600; margin-bottom: .75rem; }
 </style>
 
 <!-- Page heading / breadcrumb -->
@@ -38,66 +39,59 @@
   </div>
 </c:if>
 
-<!-- Order meta card -->
-<div class="card card-outline card-primary mb-3">
-  <div class="card-header d-flex align-items-center flex-wrap">
-    <h3 class="card-title mb-0">
-      <i class="fa fa-file-alt mr-2"></i> Details
-    </h3>
+<!-- COMPACT SINGLE-LINE ORDER DETAILS -->
+<div class="card card-outline card-primary mb-2">
+  <div class="card-body py-2 px-3 d-flex flex-wrap align-items-center details-bar">
+
+    <div class="mr-4 mb-1">
+      <span class="text-muted small">Customer:</span>
+      <strong><c:out value="${order.customer.name}"/></strong>
+    </div>
+
+    <div class="mr-4 mb-1">
+      <span class="text-muted small">Sales Manager:</span>
+      <strong>
+        <c:out value="${order.salesManager.firstName}"/> 
+        <c:out value="${order.salesManager.lastName}"/>
+      </strong>
+    </div>
+
+    <div class="mr-4 mb-1">
+      <span class="text-muted small">Location:</span>
+      <strong>
+        <span class="badge badge-info">
+          <c:out value="${order.location.label()}"/>
+        </span>
+      </strong>
+    </div>
+
+    <div class="mr-4 mb-1">
+      <span class="text-muted small">Created:</span>
+      <strong><fmt:formatDate value="${order.createdAtDate}" pattern="yyyy-MM-dd HH:mm"/></strong>
+    </div>
+
+    <div class="mr-4 mb-1 flex-grow-1">
+      <span class="text-muted small">Description:</span>
+      <span class="text-muted"><c:out value="${order.description}"/></span>
+    </div>
+
     <div class="ml-auto">
-      <!-- Smarter Back preserving list params if present -->
       <c:url var="backUrl" value="/orders">
         <c:if test="${not empty param.fromPage}"><c:param name="page" value="${param.fromPage}"/></c:if>
         <c:if test="${not empty param.fromSize}"><c:param name="size" value="${param.fromSize}"/></c:if>
         <c:if test="${not empty param.q}"><c:param name="q" value="${param.q}"/></c:if>
         <c:if test="${not empty param.loc}"><c:param name="loc" value="${param.loc}"/></c:if>
       </c:url>
-      <a class="btn btn-sm btn-secondary" href="${backUrl}">
-        <i class="fa fa-arrow-left mr-1"></i> Back to Orders
-      </a>
-      <a class="btn btn-sm btn-primary" href="${pageContext.request.contextPath}/orders/${order.id}/edit">
-        <i class="fa fa-edit mr-1"></i> Edit
-      </a>
-    </div>
-  </div>
 
-  <div class="card-body">
-    <div class="row order-meta">
-      <div class="col-md-3 col-sm-6 mb-3 meta-item">
-        <div class="label">Customer</div>
-        <div class="value"><c:out value="${order.customer.name}"/></div>
-      </div>
-      <div class="col-md-3 col-sm-6 mb-3 meta-item">
-        <div class="label">Sales Manager</div>
-        <div class="value">
-          <c:out value="${order.salesManager.firstName}"/> <c:out value="${order.salesManager.lastName}"/>
-        </div>
-      </div>
-      <div class="col-md-3 col-sm-6 mb-3 meta-item">
-        <div class="label">Location</div>
-        <div class="value">
-          <c:choose>
-            <c:when test="${order.location.name() == 'KENYA'}">
-              <span class="badge badge-primary"><c:out value="${order.location.label()}"/></span>
-            </c:when>
-            <c:when test="${order.location.name() == 'TANZANIA'}">
-              <span class="badge badge-secondary"><c:out value="${order.location.label()}"/></span>
-            </c:when>
-            <c:otherwise>
-              <span class="badge badge-secondary"><c:out value="${order.location.label()}"/></span>
-            </c:otherwise>
-          </c:choose>
-        </div>
-      </div>
-      <div class="col-md-3 col-sm-6 mb-3 meta-item">
-        <div class="label">Created</div>
-        <div class="value"><fmt:formatDate value="${order.createdAtDate}" pattern="yyyy-MM-dd HH:mm"/></div>
-      </div>
-      <div class="col-12">
-        <div class="label">Description</div>
-        <div class="value text-muted"><c:out value="${order.description}"/></div>
-      </div>
+      <a class="btn btn-sm btn-secondary mr-1" href="${backUrl}">
+        <i class="fa fa-arrow-left"></i>
+      </a>
+
+      <a class="btn btn-sm btn-primary" href="${pageContext.request.contextPath}/orders/${order.id}/edit">
+        <i class="fa fa-edit"></i>
+      </a>
     </div>
+
   </div>
 </div>
 

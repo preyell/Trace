@@ -17,8 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import com.sybyl.trace.order.expense.AdditionalExpense;
 import com.sybyl.trace.order.expense.AdditionalExpenseService;
-import com.sybyl.trace.order.finance.OrderInvoice;
-import com.sybyl.trace.order.finance.OrderInvoiceService;
 import com.sybyl.trace.order.margin.MarginReport;
 import com.sybyl.trace.order.margin.MarginReportService;
 
@@ -27,7 +25,6 @@ public class NetMarginReportService {
 
     private final OrderService orderService;
     private final AdditionalExpenseService additionalExpenseService;
-    private final OrderInvoiceService orderInvoiceService;
     private final VelocityEngine velocityEngine;
     private final DecimalFormat moneyFmt;
     private final DateTimeFormatter dtFmt;
@@ -35,11 +32,9 @@ public class NetMarginReportService {
     public NetMarginReportService(OrderService orderService,
                                   MarginReportService marginReportService,
                                   AdditionalExpenseService additionalExpenseService,
-                                  OrderInvoiceService orderInvoiceService,
                                   VelocityEngine velocityEngine) {
         this.orderService = orderService;
         this.additionalExpenseService = additionalExpenseService;
-        this.orderInvoiceService = orderInvoiceService;
         this.velocityEngine = velocityEngine;
         this.moneyFmt = new DecimalFormat("0.00");
 

@@ -44,29 +44,43 @@
 			</ul>
 		</nav>
 
+		<c:set var="ctx" value="${pageContext.request.contextPath}" />
+
+		<c:set var="reqUri"
+			value="${not empty requestScope['jakarta.servlet.forward.request_uri']
+                     ? requestScope['jakarta.servlet.forward.request_uri']
+                     : pageContext.request.requestURI}" />
+
+		<c:set var="path"
+			value="${fn:substring(reqUri, fn:length(ctx), fn:length(reqUri))}" />
+
+
 		<!-- Sidebar -->
 		<aside class="main-sidebar sidebar-dark-primary elevation-4">
-			<a href="${pageContext.request.contextPath}/" class="brand-link">
-				<span class="brand-text fw-bold ml-2">Trace</span>
+			<a href="${ctx}/" class="brand-link"> <span
+				class="brand-text fw-bold ml-2">Trace</span>
 			</a>
 			<div class="sidebar">
 				<nav class="mt-2">
 					<ul class="nav nav-pills nav-sidebar flex-column"
 						data-widget="treeview" role="menu">
-						<c:set var="ctx" value="${pageContext.request.contextPath}" />
-						<c:set var="uri" value="${pageContext.request.requestURI}" />
 
 						<sec:authorize access="hasRole('ROLE_ADMIN')">
 
-							<!-- figure out what's active -->
+							<%-- figure out what's active inside /admin --%>
 							<c:set var="isUsers"
-								value="${fn:startsWith(uri, ctx.concat('/admin/users'))}" />
+								value="${fn:startsWith(path, '/admin/users')}" />
 							<c:set var="isVerticals"
-								value="${fn:startsWith(uri, ctx.concat('/admin/verticals'))}" />
+								value="${fn:startsWith(path, '/admin/verticals')}" />
 							<c:set var="isCustomers"
-								value="${fn:startsWith(uri, ctx.concat('/admin/customers'))}" />
+								value="${fn:startsWith(path, '/admin/customers')}" />
+							<c:set var="isExpenses"
+								value="${fn:startsWith(path, '/admin/expenses')}" />
+								<c:set var="isAudits"
+								value="${fn:startsWith(path, '/admin/audit-log')}" />
+
 							<c:set var="mdOpen"
-								value="${isUsers or isVerticals or isCustomers}" />
+								value="${isUsers or isVerticals or isCustomers or isExpenses}" />
 
 							<!-- Master Data tree -->
 							<li class="nav-item has-treeview ${mdOpen ? 'menu-open' : ''}">
@@ -95,29 +109,56 @@
 											class="far fa-circle nav-icon"></i>
 											<p>Customers</p>
 									</a></li>
-									<c:set var="isExpenses"
-										value="${fn:startsWith(uri, ctx.concat('/admin/expenses'))}" />
+
 									<li class="nav-item"><a href="${ctx}/admin/expenses"
 										class="nav-link ${isExpenses ? 'active' : ''}"> <i
 											class="far fa-circle nav-icon"></i>
-										<p>Additional Expense Labels</p>
+											<p>Additional Expense Labels</p>
 									</a></li>
-
 								</ul>
 							</li>
 
 						</sec:authorize>
-						<c:set var="isOrders"
-							value="${fn:startsWith(uri, ctx.concat('/orders'))}" />
+
+
+						<%-- Orders and other non-admin menus --%>
+						<c:set var="isOrders" value="${fn:startsWith(path, '/orders')}" />
+						<c:set var="isExpensesOverview"
+							value="${fn:startsWith(path, '/reports/expenses')}" />
+						<c:set var="isChangePassword"
+							value="${fn:startsWith(path, '/account/change-password')}" />
+
 						<li class="nav-item"><a href="${ctx}/orders"
 							class="nav-link ${isOrders ? 'active' : ''}"> <i
 								class="nav-icon fas fa-file-invoice"></i>
 								<p>Orders</p>
 						</a></li>
+
+						<sec:authorize
+							access="hasAnyAuthority('ROLE_ADMIN','ROLE_CEO','ROLE_FINANCE_APPROVER','ROLE_FINANCE','ROLE_CFO')">
+								<li class="nav-item"><a href="${ctx}/admin/audit-log"
+								class="nav-link ${isAudits ? 'active' : ''}"> <i
+									class="nav-icon fa fa-list"></i>
+									<p>Audit Log</p>
+							</a></li>
+							<li class="nav-item"><a href="${ctx}/reports/expenses"
+								class="nav-link ${isExpensesOverview ? 'active' : ''}"> <i
+									class="nav-icon fa fa-list"></i>
+									<p>Expense Overview</p>
+							</a></li>
+							<li class="nav-item"><a
+								href="${ctx}/account/change-password"
+								class="nav-link ${isChangePassword ? 'active' : ''}"> <i
+									class="fa fa-key mr-1"></i> <p>Change Password</p>
+							</a></li>
+						</sec:authorize>
+
+
 					</ul>
 				</nav>
 			</div>
 		</aside>
+
 
 		<!-- Content -->
 		<div class="content-wrapper">
@@ -149,6 +190,28 @@
 	<c:if test="${not empty scriptJsp}">
 		<jsp:include page="${scriptJsp}" />
 	</c:if>
-
+	<script>
+(function(){
+  function refreshNotifCount() {
+    fetch('${pageContext.request.contextPath}/notifications/unread-count', {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(r => r.ok ? r.text() : '0')
+    .then(txt => {
+      var n = parseInt(txt, 10) || 0;
+      var b = document.getElementById('notifBadge');
+      if (!b) return;
+      if (n > 0) {
+        b.textContent = n;
+        b.style.display = 'inline-block';
+      } else {
+        b.style.display = 'none';
+      }
+    })
+    .catch(() => {});
+  }
+  document.addEventListener('DOMContentLoaded', refreshNotifCount);
+})();
+</script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 <%@ include file="/WEB-INF/jsp/common/taglibs.jsp"%>
-
+<%@ taglib prefix="fmt" uri="http://java.sun.com/jsp/jstl/fmt"%>
 <table class="table mb-0">
 	<thead>
 		<tr>
@@ -8,6 +8,7 @@
 			<th>Customer</th>
 			<th>Description</th>
 			<th>Sales Manager</th>
+			<th>Status</th>
 			<th>Verticals</th>
 			<th>Location</th>
 			<th>Created By</th>
@@ -50,7 +51,39 @@
 
 						<td><c:out value="${o.salesManager.firstName}" /> <c:out
 								value=" " /> <c:out value="${o.salesManager.lastName}" /></td>
+						<td><c:choose>
+								<c:when
+									test="${o.statusCode == 'MR_APPROVED_NO_EXPENSE' 
+                           or o.statusCode == 'EXP_CFO_APPROVED'}">
+									<span class="badge badge-success"> <c:out
+											value="${o.statusLabel}" />
+									</span>
+								</c:when>
 
+								<c:when
+									test="${o.statusCode == 'MR_FINANCE_PENDING'
+                           or o.statusCode == 'MR_CEO_PENDING'
+                           or o.statusCode == 'EXP_WAITING'
+                           or o.statusCode == 'EXP_CEO_APPROVED'}">
+									<span class="badge badge-warning"> <c:out
+											value="${o.statusLabel}" />
+									</span>
+								</c:when>
+
+								<c:when
+									test="${o.statusCode == 'MR_REJECTED'
+                           or o.statusCode == 'EXP_REJECTED'}">
+									<span class="badge badge-danger"> <c:out
+											value="${o.statusLabel}" />
+									</span>
+								</c:when>
+
+								<c:otherwise>
+									<span class="badge badge-secondary"> <c:out
+											value="${o.statusLabel}" />
+									</span>
+								</c:otherwise>
+							</c:choose></td>
 						<td><c:forEach var="v" items="${o.verticals}" varStatus="vs">
 								<c:out value="${v.name}" />
 								<c:if test="${!vs.last}">, </c:if>

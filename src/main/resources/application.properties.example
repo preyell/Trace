@@ -1,0 +1,69 @@
+spring.application.name=Trace
+# Server
+server.port=8080
+server.error.whitelabel.enabled=false
+# View resolver for JSP
+spring.mvc.view.prefix=/WEB-INF/jsp/
+spring.mvc.view.suffix=.jsp
+
+# DataSource (adjust to your environment)
+spring.datasource.url=jdbc:postgresql://localhost:5432/trace
+spring.datasource.username=#CHANGE_ME
+spring.datasource.password=#CHANGE_ME
+spring.datasource.hikari.maximum-pool-size=5
+
+# JPA (optional)
+spring.jpa.hibernate.ddl-auto=none
+spring.jpa.show-sql=true
+
+# Logging
+logging.level.org.springframework.security=DEBUG
+logging.level.org.springframework.jdbc.core=DEBUG
+logging.level.org.springframework.jdbc.core.JdbcTemplate=DEBUG
+
+# SMTP for emails
+spring.mail.host=smtp.gmail.com
+spring.mail.port=587
+spring.mail.username=#CHANGE_ME
+spring.mail.password=#CHANGE_ME
+
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.starttls.enable=true
+spring.mail.properties.mail.smtp.starttls.required=true
+
+# (Optional but helpful)
+spring.mail.properties.mail.smtp.connectiontimeout=10000
+spring.mail.properties.mail.smtp.timeout=10000
+spring.mail.properties.mail.smtp.writetimeout=10000
+
+#server.servlet.context-path=/trace
+app.public-base-url=http://localhost:8080
+spring.jpa.open-in-view=false
+
+spring.servlet.multipart.max-file-size=20MB
+spring.servlet.multipart.max-request-size=20MB
+
+app.upload.margin-reports.path=D:/trace_docs/margin-reports
+app.upload.additional-expenses.path=D:/trace_docs/additional-expenses
+
+logging.level.root=INFO
+logging.level.com.sybyl.trace=DEBUG
+LOG_DIR=D:/trace_log
+LOG_NAME=trace-app
+
+# === DB BACKUP SCHEDULER ===
+app.backup.enabled=true
+# Run every day at 02:30
+app.backup.cron=0 30 2 * * *
+app.backup.recipient=#CHANGE_ME
+app.backup.from=traceapptest@gmail.com
+
+# Optional: where to store temp backup files
+app.backup.temp-dir=D:/trace_backups
+
+# Optional: full path to pg_dump if not in PATH
+app.backup.pg-dump-path=C:/Program Files/PostgreSQL/17/bin/pg_dump.exe
+# --- Notification Cleanup Job ---
+app.notifications.cleanup.enabled=true
+app.notifications.cleanup.days=90
+app.notifications.cleanup.cron=0 15 2 * * *

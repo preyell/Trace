@@ -1,5 +1,4 @@
-// com.sybyl.trace.order.MarginReport.java
-package com.sybyl.trace.order;
+package com.sybyl.trace.order.margin;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -9,8 +8,12 @@ import java.util.Date;
 import java.util.List;
 
 import com.sybyl.trace.masterdata.Vertical;
+import com.sybyl.trace.order.CurrencyCode;
+import com.sybyl.trace.order.Order;
 import com.sybyl.trace.user.AppUser;
 
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -27,7 +30,6 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
-import jakarta.persistence.Version;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -111,7 +113,7 @@ public class MarginReport {
 	// --- Status & audit ---
 	@Enumerated(EnumType.STRING)
 	@Column(name = "approval_status", nullable = false)
-	private ApprovalStatus approvalStatus = ApprovalStatus.FINANCE_PENDING;
+	private MarginReportApprovalStatus approvalStatus = MarginReportApprovalStatus.FINANCE_PENDING;
 
 	@Column(name = "uploaded_on", nullable = false, updatable = false)
 	private Instant uploadedOn = Instant.now();
@@ -144,7 +146,10 @@ public class MarginReport {
 	private String rejectionReason;
 
 
-	@OneToMany(mappedBy = "marginReport")
+	@OneToMany(mappedBy = "marginReport",
+	           cascade = CascadeType.ALL,
+	           orphanRemoval = true,
+	           fetch = FetchType.EAGER)
 	@OrderBy("actedOn DESC")
 	private List<MarginReportAudit> audits = new ArrayList<>();
 

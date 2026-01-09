@@ -1,4 +1,3 @@
-// com.sybyl.trace.order.OrderController
 package com.sybyl.trace.order;
 
 import java.io.IOException;
@@ -7,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -27,14 +27,21 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import com.sybyl.trace.audit.AppAuditService;
 import com.sybyl.trace.location.Location;
 import com.sybyl.trace.masterdata.AdditionalExpenseLabelService;
 import com.sybyl.trace.masterdata.CustomerRepository;
 import com.sybyl.trace.masterdata.Vertical;
 import com.sybyl.trace.masterdata.VerticalRepository;
+import com.sybyl.trace.order.expense.AdditionalExpenseService;
+import com.sybyl.trace.order.finance.OrderInvoiceService;
+import com.sybyl.trace.order.margin.MarginReportApprovalStatus;
+import com.sybyl.trace.order.margin.MarginReportService;
 import com.sybyl.trace.security.MyUserDetails;
 import com.sybyl.trace.user.AppUserRepository;
+import com.sybyl.trace.web.IpUtils;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -51,11 +58,19 @@ public class OrderController {
 	private final MarginReportService marginReportService;
 	private final AdditionalExpenseLabelService additionalExpenseLabelService;
 	private final AdditionalExpenseService additionalExpenseService;
+	private final OrderInvoiceService orderInvoiceService;
+	private final NetMarginReportService netMarginReportService;
+	private final AppAuditService auditService;
+
 	@Value("${app.upload.margin-reports.path}")
 	private String uploadBasePath;
 
 	public OrderController(OrderService orderService, CustomerRepository customers, AppUserRepository users,
-			VerticalRepository verticals, MarginReportService marginReportService, AdditionalExpenseLabelService additionalExpenseLabelService, AdditionalExpenseService additionalExpenseService) {
+			VerticalRepository verticals, MarginReportService marginReportService,
+			AdditionalExpenseLabelService additionalExpenseLabelService,
+			AdditionalExpenseService additionalExpenseService, OrderInvoiceService orderInvoiceService,
+			NetMarginReportService netMarginReportService, AppAuditService auditService) {
+
 		this.orderService = orderService;
 		this.customers = customers;
 		this.users = users;
@@ -63,6 +78,9 @@ public class OrderController {
 		this.marginReportService = marginReportService;
 		this.additionalExpenseLabelService = additionalExpenseLabelService;
 		this.additionalExpenseService = additionalExpenseService;
+		this.orderInvoiceService = orderInvoiceService;
+		this.netMarginReportService = netMarginReportService;
+		this.auditService = auditService;
 	}
 
 	// LIST
@@ -125,7 +143,8 @@ public class OrderController {
 
 	@PostMapping("/orders")
 	public String create(@AuthenticationPrincipal MyUserDetails me, @Valid @ModelAttribute("form") OrderForm form,
-			BindingResult errors, Model model, RedirectAttributes redirectAttrs) {
+			BindingResult errors, Model model, RedirectAttributes redirectAttrs, HttpServletRequest request) {
+
 		log.info("Create order requested by userId={}, salesOrderId={}", (me != null ? me.getUsername() : null),
 				form.getSalesOrderId());
 
@@ -136,9 +155,16 @@ public class OrderController {
 			model.addAttribute("contentJsp", "orders/orderform.jsp");
 			return "layout";
 		}
+
 		try {
 			Order created = orderService.create(me.getUser(), form);
 			log.info("Order created: id={}, salesOrderId={}", created.getId(), created.getSalesOrderId());
+
+			String actorIp = IpUtils.getClientIp(request);
+
+			auditService.logEvent("ORDER", created.getId(), created.getSalesOrderId(), "CREATE",
+					"Created order " + created.getSalesOrderId(), null, me != null ? me.getUser() : null, actorIp);
+
 		} catch (AccessDeniedException ex) {
 			log.warn("Create order forbidden for userId={}, location={}", me.getUsername(), form.getLocation());
 			errors.rejectValue("location", "order.location.forbidden",
@@ -160,7 +186,8 @@ public class OrderController {
 	@PostMapping("/orders/{id}")
 	public String update(@AuthenticationPrincipal MyUserDetails me, @PathVariable Long id,
 			@Valid @ModelAttribute("form") OrderForm form, BindingResult errors, Model model,
-			RedirectAttributes redirectAttrs) {
+			RedirectAttributes redirectAttrs, HttpServletRequest request) {
+
 		log.info("Update order requested by userId={}, id={}, salesOrderId={}", me.getUsername(), id,
 				form.getSalesOrderId());
 
@@ -175,6 +202,14 @@ public class OrderController {
 		try {
 			orderService.update(me.getUser(), id, form);
 			log.info("Order updated: id={}", id);
+
+			Order updated = orderService.getForDetails(id);
+
+			String actorIp = IpUtils.getClientIp(request);
+
+			auditService.logEvent("ORDER", updated.getId(), updated.getSalesOrderId(), "UPDATE",
+					"Updated order " + updated.getSalesOrderId(), null, me != null ? me.getUser() : null, actorIp);
+
 		} catch (AccessDeniedException ex) {
 			log.warn("Update order forbidden: userId={}, id={}, newLocation={}", me.getUsername(), id,
 					form.getLocation());
@@ -182,21 +217,41 @@ public class OrderController {
 					"You are not allowed to update orders for this location.");
 			model.addAttribute("pageTitle", "Update Order");
 			supplyFormLookups(model, me);
-			model.addAttribute("contentJsp", "orders/form.jsp");
+			model.addAttribute("contentJsp", "orders/orderform.jsp");
 			return "layout";
 		} catch (Exception ex) {
 			log.error("Update order failed: id={}", id, ex);
 			throw ex;
 		}
+
 		redirectAttrs.addFlashAttribute("message", "Order updated successfully.");
 		return "redirect:/orders";
 	}
 
 	@PostMapping("/orders/{id}/delete")
-	public String delete(@PathVariable Long id, RedirectAttributes redirectAttrs) {
-		log.warn("Delete order requested: id={}", id);
+	public String delete(@AuthenticationPrincipal MyUserDetails me, @PathVariable Long id,
+			RedirectAttributes redirectAttrs, HttpServletRequest request) {
+
+		log.warn("Delete order requested: id={}, userId={}", id, (me != null ? me.getUsername() : null));
+
+		Order order = null;
+		try {
+			order = orderService.getForDetails(id);
+		} catch (Exception ex) {
+			log.warn("Delete order: order not found for id={}", id);
+		}
+
 		orderService.delete(id);
+
+		String salesOrderId = (order != null ? order.getSalesOrderId() : null);
+		String actorIp = IpUtils.getClientIp(request);
+
+		auditService.logEvent("ORDER", id, salesOrderId, "DELETE",
+				"Deleted order " + (salesOrderId != null ? salesOrderId : ("id=" + id)), null,
+				me != null ? me.getUser() : null, actorIp);
+
 		redirectAttrs.addFlashAttribute("message", "Order deleted.");
+		log.info("Order deleted: id={}, salesOrderId={}", id, salesOrderId);
 		return "redirect:/orders";
 	}
 
@@ -226,32 +281,52 @@ public class OrderController {
 		return f;
 	}
 
+	// SHOW order details
 	@GetMapping("/orders/{id}")
 	public String showOrderDetails(@PathVariable Long id,
 			@RequestParam(name = "tab", defaultValue = "margin") String tab, Model model) {
+
 		log.info("Order details requested: id={}, tab={}", id, tab);
 		Order order = orderService.getForDetails(id);
-		model.addAttribute("order", order);
-		model.addAttribute("activeTab", tab);
 
-		if ("margin".equals(tab)) {
-			model.addAttribute("currencies", java.util.Arrays.asList(com.sybyl.trace.order.CurrencyCode.values()));
-			model.addAttribute("verticals", verticals.findAll());
-			model.addAttribute("marginReports", marginReportService.listForOrder(id));
+		boolean allMarginsApproved = !order.getMarginReports().isEmpty() && order.getMarginReports().stream()
+				.allMatch(mr -> mr.getApprovalStatus() == MarginReportApprovalStatus.APPROVED);
+
+		model.addAttribute("order", order);
+		model.addAttribute("allMarginsApproved", allMarginsApproved);
+		model.addAttribute("activeTab", tab);
+		model.addAttribute("currencies", java.util.Arrays.asList(com.sybyl.trace.order.CurrencyCode.values()));
+
+		if ("finance".equals(tab)) {
+			model.addAttribute("invoices", orderInvoiceService.listByOrder(id));
+		} else {
+
+			var marginReports = marginReportService.listForOrder(id);
+			var orderVerticals = order.getVerticals();
+
+			Set<Long> mrVerticalIds = marginReports.stream().filter(mr -> mr.getVertical() != null)
+					.map(mr -> mr.getVertical().getId()).collect(Collectors.toSet());
+
+			var expenseVerticals = orderVerticals.stream().filter(v -> mrVerticalIds.contains(v.getId()))
+					.collect(Collectors.toList());
+
+			model.addAttribute("verticals", orderVerticals);
+			model.addAttribute("marginReports", marginReports);
+			model.addAttribute("mrVerticalIds", mrVerticalIds);
+			model.addAttribute("expenseVerticals", expenseVerticals);
+
 			model.addAttribute("expenseLabels", additionalExpenseLabelService.listActive());
 			model.addAttribute("additionalExpenses", additionalExpenseService.listForOrder(id));
-			model.addAttribute("scriptJsp",  "orders/detail/maargin-script.jsp");
+
+			model.addAttribute("scriptJsp", "orders/detail/margin-script.jsp");
 		}
 
 		model.addAttribute("pageTitle", "Order #" + order.getSalesOrderId());
-		
-
 		model.addAttribute("contentJsp", "orders/detail/order_detail.jsp");
-		
-
 		return "layout";
 	}
 
+	// EDIT form
 	@GetMapping("/orders/{id}/edit")
 	public String editForm(@AuthenticationPrincipal MyUserDetails me, @PathVariable Long id, Model model) {
 		log.info("Edit order form requested: id={}, userId={}", id, (me != null ? me.getUsername() : null));
@@ -264,6 +339,9 @@ public class OrderController {
 		return "layout";
 	}
 
+	// --------------------
+	// MARGIN REPORT UPLOAD
+	// --------------------
 	@PostMapping("/orders/{id}/margin-reports")
 	public String uploadMarginReport(@AuthenticationPrincipal MyUserDetails me, @PathVariable Long id,
 			@RequestParam("file") MultipartFile file, @RequestParam("buyingPrice") BigDecimal buyingPrice,
@@ -278,16 +356,26 @@ public class OrderController {
 		log.info("Upload margin report: orderId={}, userId={}, verticalId={}, file='{}'", id,
 				(me != null ? me.getUsername() : null), verticalId, (file != null ? file.getOriginalFilename() : null));
 
-		marginReportService.save(id, me.getUser(), file, label, buyingCurrency, sellingCurrency, buyingPrice,
-				sellingPrice, conversionRate, verticalId, comments);
+		try {
+			marginReportService.save(id, me.getUser(), file, label, buyingCurrency, sellingCurrency, buyingPrice,
+					sellingPrice, conversionRate, verticalId, comments);
 
-		ra.addFlashAttribute("message", "Margin report uploaded.");
+			ra.addFlashAttribute("message", "Margin report uploaded.");
+		} catch (IllegalStateException ex) {
+			ra.addFlashAttribute("marginError", ex.getMessage());
+			ra.addFlashAttribute("showMarginModal", true);
+		} catch (Exception ex) {
+			ra.addFlashAttribute("marginError", "Failed to upload margin report: " + ex.getMessage());
+			ra.addFlashAttribute("showMarginModal", true);
+		}
+
 		return "redirect:/orders/" + id + "?tab=margin";
 	}
 
 	@GetMapping("/orders/{orderId}/margin-reports/{mrId}/download")
 	public void downloadMarginReport(@PathVariable Long orderId, @PathVariable Long mrId, HttpServletResponse response)
 			throws IOException {
+
 		log.info("Download margin report requested: orderId={}, mrId={}", orderId, mrId);
 
 		var mr = marginReportService.getForDownload(orderId, mrId);
@@ -325,28 +413,65 @@ public class OrderController {
 		}
 	}
 
-
-
 	@PostMapping("/orders/{orderId}/margin-reports/{mrId}/delete")
-	public String deleteMarginReport(@AuthenticationPrincipal com.sybyl.trace.security.MyUserDetails me,
-			@PathVariable Long orderId, @PathVariable Long mrId,
-			@RequestParam(value = "deleteFile", defaultValue = "true") boolean deleteFile, RedirectAttributes ra)
-			throws IOException {
-		marginReportService.delete(orderId, mrId, me.getUser(), deleteFile);
-		ra.addFlashAttribute("message", "Margin report deleted.");
+	public String deleteMarginReport(@AuthenticationPrincipal MyUserDetails me, @PathVariable Long orderId,
+			@PathVariable Long mrId, @RequestParam(value = "deleteFile", defaultValue = "true") boolean deleteFile,
+			RedirectAttributes ra, HttpServletRequest request) throws IOException {
+
+		String actorIp = IpUtils.getClientIp(request);
+		try {
+			marginReportService.delete(orderId, mrId, me.getUser(), deleteFile, actorIp);
+			ra.addFlashAttribute("message", "Margin report deleted.");
+		} catch (IllegalStateException ex) {
+			ra.addFlashAttribute("error", ex.getMessage());
+		} catch (Exception ex) {
+			ra.addFlashAttribute("error", "Failed to delete margin report: " + ex.getMessage());
+		}
+
 		return "redirect:/orders/" + orderId + "?tab=margin";
 	}
 
 	@PostMapping("/orders/{orderId}/margin-reports/{mrId}/update")
-	public String updateMarginReport(@AuthenticationPrincipal com.sybyl.trace.security.MyUserDetails me,
-			@PathVariable Long orderId, @PathVariable Long mrId, @RequestParam BigDecimal buyingPrice,
-			@RequestParam CurrencyCode buyingCurrency, @RequestParam BigDecimal sellingPrice,
-			@RequestParam CurrencyCode sellingCurrency, @RequestParam BigDecimal conversionRate,
-			@RequestParam Long verticalId, @RequestParam(required = false) String comments, RedirectAttributes ra) {
-		marginReportService.update(orderId, mrId, me.getUser(), buyingPrice, buyingCurrency, sellingPrice,
-				sellingCurrency, conversionRate, verticalId, comments);
-		ra.addFlashAttribute("message", "Margin report updated.");
+	public String updateMarginReport(@AuthenticationPrincipal MyUserDetails me, @PathVariable Long orderId,
+			@PathVariable Long mrId, @RequestParam BigDecimal buyingPrice, @RequestParam CurrencyCode buyingCurrency,
+			@RequestParam BigDecimal sellingPrice, @RequestParam CurrencyCode sellingCurrency,
+			@RequestParam BigDecimal conversionRate, @RequestParam Long verticalId,
+			@RequestParam(required = false) String comments, @RequestParam(required = false) MultipartFile file,
+			RedirectAttributes ra, HttpServletRequest request) {
+
+		String actorIp = IpUtils.getClientIp(request);
+		try {
+			marginReportService.update(orderId, mrId, buyingPrice, buyingCurrency, sellingPrice, sellingCurrency,
+					conversionRate, verticalId, comments, file, me.getUser(), actorIp);
+
+			ra.addFlashAttribute("message", "Margin report updated.");
+		} catch (IllegalStateException ex) {
+			ra.addFlashAttribute("error", ex.getMessage()); 
+		}
 		return "redirect:/orders/" + orderId + "?tab=margin";
 	}
 
+	@GetMapping("/orders/{id}/net-margin-report")
+	public void downloadNetMarginReport(@PathVariable Long id, HttpServletResponse response) throws IOException {
+
+		Order order = orderService.getForDetails(id);
+
+		byte[] pdfBytes = netMarginReportService.generatePdf(id);
+		String fileName = "Net-Margin-Report-" + order.getSalesOrderId() + ".pdf";
+
+		response.setContentType("application/pdf");
+		response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName.replace("\"", "") + "\"");
+		response.setContentLength(pdfBytes.length);
+
+		response.getOutputStream().write(pdfBytes);
+		response.getOutputStream().flush();
+	}
+
+	@GetMapping("/orders/{id}/net-margin-report/preview")
+	public void previewNetMarginReport(@PathVariable Long id, HttpServletResponse response) throws IOException {
+
+		String html = netMarginReportService.generateHtmlForPreview(id);
+		response.setContentType("text/html;charset=UTF-8");
+		response.getWriter().write(html);
+	}
 }

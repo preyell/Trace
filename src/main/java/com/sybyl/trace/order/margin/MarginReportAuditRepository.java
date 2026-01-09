@@ -1,4 +1,4 @@
-package com.sybyl.trace.order;
+package com.sybyl.trace.order.margin;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

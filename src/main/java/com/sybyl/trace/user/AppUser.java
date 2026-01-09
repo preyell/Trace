@@ -22,6 +22,9 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -45,6 +48,9 @@ public class AppUser {
 	private String firstName;
 	@Column(name = "last_name", nullable = false)
 	private String lastName;
+	@NotBlank(message = "Email is required")
+	@Email(message = "Enter a valid email address")
+	@Size(max = 255)
 	@Column(nullable = false, unique = true)
 	private String email;
 
@@ -80,5 +86,8 @@ public class AppUser {
 	}
 
 	public boolean isAdmin() { return hasRole(AppRole.ADMIN); }
+	public void setEmail(String email) {
+	    this.email = (email == null) ? null : email.trim();
+	}
 
 }

@@ -10,6 +10,14 @@
 <c:if test="${param.deleted == 'true'}"><div class="alert alert-primary py-2">User deleted.</div></c:if>
 <c:if test="${param.activationResent == 'true'}"><div class="alert alert-primary py-2">Activation email re-sent.</div></c:if>
 
+<c:if test="${not empty message}">
+  <div class="alert alert-primary py-2">${message}</div>
+</c:if>
+<c:if test="${not empty error}">
+  <div class="alert alert-danger py-2">${error}</div>
+</c:if>
+
+
 <!-- Search + page size (no buttons) -->
 <div class="mb-3">
   <div class="input-group">

@@ -1,4 +1,4 @@
-package com.sybyl.trace.order;
+package com.sybyl.trace.order.expense;
 
 import java.util.List;
 

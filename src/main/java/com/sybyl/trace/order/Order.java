@@ -8,6 +8,7 @@ import java.util.Set;
 import com.sybyl.trace.location.Location;
 import com.sybyl.trace.masterdata.Customer;
 import com.sybyl.trace.masterdata.Vertical;
+import com.sybyl.trace.order.margin.MarginReport;
 import com.sybyl.trace.user.AppUser;
 
 import jakarta.persistence.CascadeType;
@@ -27,6 +28,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Setter;
@@ -51,6 +53,9 @@ public class Order {
 
 	@Column(length = 500)
 	private String description;
+	
+	@Transient
+	private OrderStatusView statusView;
 
 	/** Sales manager responsible for the order */
 	@ManyToOne(optional = false, fetch = FetchType.LAZY)
@@ -90,4 +95,16 @@ public class Order {
 	public java.util.Date getCreatedAtDate() {
 		return java.util.Date.from(createdAt);
 	}
+	
+	
+
+	@Transient
+    public String getStatusCode() {
+        return statusView != null ? statusView.name() : "";
+    }
+
+	@Transient
+    public String getStatusLabel() {
+        return statusView != null ? statusView.getLabel() : "";
+    }
 }

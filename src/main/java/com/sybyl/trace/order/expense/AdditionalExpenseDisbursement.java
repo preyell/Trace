@@ -1,10 +1,24 @@
 // com.sybyl.trace.order.AdditionalExpenseDisbursement.java
-package com.sybyl.trace.order;
+package com.sybyl.trace.order.expense;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+
+import com.sybyl.trace.order.CurrencyCode;
 import com.sybyl.trace.user.AppUser;
-import jakarta.persistence.*;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -36,9 +50,17 @@ public class AdditionalExpenseDisbursement {
 	@Column(name = "amount_usd", nullable = false, precision = 18, scale = 2)
 	private BigDecimal amountUsd;
 
+	@Column(name = "conversion_rate", precision = 18, scale = 6)
+	private BigDecimal conversionRate;
+
 	@Column(name = "disbursed_on", nullable = false)
 	private Instant disbursedOn;
 
 	@Column(name = "note", columnDefinition = "text")
 	private String note;
+	
+	  @Transient
+	  public java.util.Date getDisbursedOnDate() {
+	      return disbursedOn == null ? null : java.util.Date.from(disbursedOn);
+	  }
 }

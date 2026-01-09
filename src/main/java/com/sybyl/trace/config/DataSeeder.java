@@ -28,12 +28,7 @@ public class DataSeeder implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        // Ensure roles exist
 
-        // Ensure a sample vertical exists (for later user accounts)
-       // Vertical fin = findOrCreateVertical("Finance");
-
-        // Ensure admin user exists
         users.findByUsernameIgnoreCase("admin").orElseGet(() -> {
             AppUser u = new AppUser();
             u.setUsername("admin");
@@ -50,8 +45,5 @@ public class DataSeeder implements ApplicationRunner {
         });
     }
 
-    private Vertical findOrCreateVertical(String name) {
-        return verticals.findByNameIgnoreCase(name)
-                .orElseGet(() -> new Vertical(name));
-        };
+
 }

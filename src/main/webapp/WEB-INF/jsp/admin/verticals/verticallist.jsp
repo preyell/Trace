@@ -7,9 +7,14 @@
   </a>
 </div>
 
-<c:if test="${param.created == 'true'}"><div class="alert alert-primary py-2">Vertical created.</div></c:if>
-<c:if test="${param.updated == 'true'}"><div class="alert alert-primary py-2">Vertical updated.</div></c:if>
-<c:if test="${param.deleted == 'true'}"><div class="alert alert-primary py-2">Vertical deleted.</div></c:if>
+<c:if test="${not empty message}">
+  <div class="alert alert-primary py-2">${message}</div>
+</c:if>
+
+<c:if test="${not empty error}">
+  <div class="alert alert-danger py-2">${error}</div>
+</c:if>
+
 
 <!-- Search + page size (no buttons) -->
 <div class="mb-3">

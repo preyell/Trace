@@ -1,5 +1,5 @@
 // com.sybyl.trace.order.AdditionalExpense.java
-package com.sybyl.trace.order;
+package com.sybyl.trace.order.expense;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -8,6 +8,8 @@ import java.util.List;
 
 import com.sybyl.trace.masterdata.AdditionalExpenseLabel;
 import com.sybyl.trace.masterdata.Vertical;
+import com.sybyl.trace.order.CurrencyCode;
+import com.sybyl.trace.order.Order;
 import com.sybyl.trace.user.AppUser;
 
 import jakarta.persistence.CascadeType;
@@ -22,6 +24,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import lombok.Getter;
@@ -68,6 +71,10 @@ public class AdditionalExpense {
   @OneToMany(mappedBy="expense", cascade=CascadeType.ALL, orphanRemoval=true)
   private List<AdditionalExpenseDisbursement> disbursements = new ArrayList<>();
   
+  @OneToMany(mappedBy = "expense", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+  @OrderBy("actedOn DESC")
+  private List<AdditionalExpenseAudit> audits = new ArrayList<>();
+
   @Transient
   public java.util.Date getUploadedOnDate() {
       return uploadedOn == null ? null : java.util.Date.from(uploadedOn);

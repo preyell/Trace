@@ -1,5 +1,5 @@
 // com.sybyl.trace.order.AdditionalExpenseAudit.java
-package com.sybyl.trace.order;
+package com.sybyl.trace.order.expense;
 
 import java.time.Instant;
 import com.sybyl.trace.user.AppUser;
@@ -19,7 +19,7 @@ public class AdditionalExpenseAudit {
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "expense_id", nullable = false)
 	private AdditionalExpense expense;
-	@ManyToOne
+	@ManyToOne(fetch = FetchType.EAGER)
 	private AppUser actor;
 
 	@Column(nullable = false)

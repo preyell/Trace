@@ -27,4 +27,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
   @Query("select u from AppUser u join u.roles r where r = com.sybyl.trace.user.AppRole.SALES_MANAGER")
   List<AppUser> findAllSalesManagers();
   Optional<AppUser> findByEmailIgnoreCase(String email);
+  
+  List<AppUser> findByRoles(AppRole role);
+
 }

@@ -1,5 +1,5 @@
 // com.sybyl.trace.order.MarginReportAudit.java
-package com.sybyl.trace.order;
+package com.sybyl.trace.order.margin;
 
 import java.time.Instant;
 
