@@ -1,5 +1,6 @@
 package com.sybyl.trace.masterdata;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -18,6 +19,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+
 @Controller
 @RequiredArgsConstructor
 @RequestMapping("/admin/expenses")
@@ -27,83 +29,74 @@ public class AdditionalExpenseLabelController {
 	private final AdditionalExpenseLabelService svc;
 	private final AdditionalExpenseLabelRepository repo;
 	private final AppAuditService auditService;
+	
 
 	@GetMapping
-	public String list(@RequestParam(defaultValue = "true") boolean showInactive, Model m) {
-
-		log.info("AdditionalExpense labels list requested: showInactive={}", showInactive);
-
-		m.addAttribute("labels", showInactive ? repo.findAllForAdmin() : repo.findAllActive());
+	public String list(@RequestParam(defaultValue = "") String q,
+			@RequestParam(defaultValue = "10") int size,
+			@RequestParam(defaultValue = "0") int page, Model m) {
+		m.addAttribute("page", svc.search(q, PageRequest.of(page, size)));
 		m.addAttribute("pageTitle", "Additional Expense Labels");
-		m.addAttribute("contentJsp", "admin/expenses.jsp");
+		m.addAttribute("contentJsp", "admin/expenses/list.jsp");
 		return "layout";
 	}
 
-	@PostMapping("/create")
-	public String create(@RequestParam String name, @RequestParam(required = false) String description,
-			@AuthenticationPrincipal MyUserDetails me, HttpServletRequest request, RedirectAttributes ra) {
+	@GetMapping("/table")
+	public String table(@RequestParam(defaultValue = "") String q,
+			@RequestParam(defaultValue = "10") int size,
+			@RequestParam(defaultValue = "0") int page, Model m) {
+		m.addAttribute("page", svc.search(q, PageRequest.of(page, size)));
+		return "admin/expenses/_table"; 
+	}
 
-		log.info("Create AdditionalExpenseLabel requested: name={}", name);
+	@GetMapping("/new")
+	public String newForm(Model m) {
+		m.addAttribute("label", new AdditionalExpenseLabel()); // empty obj for the form
+		m.addAttribute("mode", "create");
+		m.addAttribute("pageTitle", "New Additional Expense Label");
+		m.addAttribute("contentJsp", "admin/expenses/form.jsp");
+		return "layout";
+	}
 
-		var label = svc.create(name, description, false);
+	@GetMapping("/{id}/edit")
+	public String editForm(@PathVariable Long id, Model m) {
+		m.addAttribute("label", repo.findById(id).orElseThrow());
+		m.addAttribute("mode", "edit");
+		m.addAttribute("pageTitle", "Edit Additional Expense Label");
+		m.addAttribute("contentJsp", "admin/expenses/form.jsp");
+		return "layout";
+	}
 
-		AppUser actor = me != null ? me.getUser() : null;
-		String actorIp = request != null ? request.getRemoteAddr() : null;
-
-		auditService.logEvent("ADDITIONAL_EXPENSE_LABEL", label.getId(), null, "CREATE",
-				"Created additional expense label: " + label.getName(), null, actor, actorIp);
-
-		ra.addFlashAttribute("message", "Label created.");
-		log.info("AdditionalExpenseLabel created successfully: id={}, name={}", label.getId(), label.getName());
-
+	@PostMapping
+	public String saveCreate(@RequestParam String name, @RequestParam(required = false) String description,
+			@AuthenticationPrincipal MyUserDetails me, RedirectAttributes ra) {
+		try {
+			var label = svc.create(name, description, false);
+			auditService.logEvent("ADDITIONAL_EXPENSE_LABEL", label.getId(), null, "CREATE",
+					"Created label: " + label.getName(), null, me != null ? me.getUser() : null);
+			ra.addFlashAttribute("message", "Label created successfully.");
+		} catch (Exception ex) {
+			ra.addFlashAttribute("error", ex.getMessage());
+		}
 		return "redirect:/admin/expenses";
 	}
 
-	@PostMapping("/{id}/deactivate")
-	public String deactivate(@PathVariable Long id, @AuthenticationPrincipal MyUserDetails me,
-			HttpServletRequest request, RedirectAttributes ra) {
-
-		log.info("Deactivate AdditionalExpenseLabel requested: id={}", id);
-
-		var label = repo.findById(id).orElse(null);
-		String labelName = (label != null) ? label.getName() : ("id=" + id);
-
-		svc.deactivate(id);
-
-		AppUser actor = me != null ? me.getUser() : null;
-		String actorIp = request != null ? request.getRemoteAddr() : null;
-
-		auditService.logEvent("ADDITIONAL_EXPENSE_LABEL", id, null, "DEACTIVATE",
-				"Deactivated additional expense label: " + labelName, null, actor, actorIp);
-
-		ra.addFlashAttribute("message", "Label deactivated.");
-		log.info("AdditionalExpenseLabel deactivated: {}", labelName);
-
-		return "redirect:/admin/expenses?showInactive=true";
-	}
-
-	@PostMapping("/{id}/reactivate")
-	public String reactivate(@PathVariable Long id, @AuthenticationPrincipal MyUserDetails me,
-			HttpServletRequest request, RedirectAttributes ra) {
-
-		log.info("Reactivate AdditionalExpenseLabel requested: id={}", id);
-
-		var label = repo.findById(id).orElse(null);
-		String labelName = (label != null) ? label.getName() : ("id=" + id);
-
-		svc.reactivate(id);
-
-		AppUser actor = me != null ? me.getUser() : null;
-		String actorIp = request != null ? request.getRemoteAddr() : null;
-
-		auditService.logEvent("ADDITIONAL_EXPENSE_LABEL", id, null, "REACTIVATE",
-				"Reactivated additional expense label: " + labelName, null, actor, actorIp);
-
-		ra.addFlashAttribute("message", "Label reactivated.");
-		log.info("AdditionalExpenseLabel reactivated: {}", labelName);
-
+	@PostMapping("/{id}")
+	public String saveEdit(@PathVariable Long id, @RequestParam String name,
+			@RequestParam(required = false) String description,
+			@RequestParam(defaultValue = "false") boolean active,
+			@AuthenticationPrincipal MyUserDetails me, RedirectAttributes ra) {
+		try {
+			var label = svc.update(id, name, description, active);
+			auditService.logEvent("ADDITIONAL_EXPENSE_LABEL", label.getId(), null, "EDIT",
+					"Edited label: " + label.getName(), null, me != null ? me.getUser() : null);
+			ra.addFlashAttribute("message", "Label updated successfully.");
+		} catch (Exception ex) {
+			ra.addFlashAttribute("error", ex.getMessage());
+		}
 		return "redirect:/admin/expenses";
 	}
+
 
 	@PostMapping("/{id}/delete")
 	public String delete(@PathVariable Long id, @AuthenticationPrincipal MyUserDetails me, HttpServletRequest request,
@@ -117,10 +110,9 @@ public class AdditionalExpenseLabelController {
 		try {
 			svc.delete(id);
 			AppUser actor = me != null ? me.getUser() : null;
-			String actorIp = request != null ? request.getRemoteAddr() : null;
 
 			auditService.logEvent("ADDITIONAL_EXPENSE_LABEL", id, null, "DELETE",
-					"Deleted additional expense label: " + labelName, null, actor, actorIp);
+					"Deleted additional expense label: " + labelName, null, actor);
 
 			ra.addFlashAttribute("message", "Label deleted.");
 			log.info("AdditionalExpenseLabel deleted: {}", labelName);

@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.List;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -66,7 +68,36 @@ public class AdditionalExpenseLabelService {
         l.setActive(true);
         log.debug("AdditionalExpenseLabel reactivated: id={}, name={}", l.getId(), l.getName());
     }
+    @Transactional(readOnly = true)
+	public Page<AdditionalExpenseLabel> search(String q, Pageable pageable) {
+		return repo.search(q == null ? "" : q, pageable);
+	}
 
+	@Transactional
+	public AdditionalExpenseLabel update(Long id, String name, String description, boolean active) {
+		log.info("Updating AdditionalExpenseLabel: id={}, name={}", id, name);
+		
+		var l = repo.findById(id).orElseThrow(() -> new IllegalArgumentException("Label not found"));
+
+		if (!l.getName().equalsIgnoreCase(name.trim()) && repo.existsByNameIgnoreCase(name.trim())) {
+			throw new IllegalArgumentException("Label already exists: " + name);
+		}
+
+		if (l.isSystem() && !l.getName().equalsIgnoreCase(name.trim())) {
+			throw new IllegalStateException("System labels cannot be renamed.");
+		}
+
+		l.setName(name.trim());
+		l.setDescription(description);
+        
+        // Let the form update the active state (unless it's a system label)
+        if (!l.isSystem()) {
+		    l.setActive(active);
+        }
+
+		return repo.save(l);
+	}
+    
     @Transactional
     public void delete(Long id) {
         log.info("Deleting AdditionalExpenseLabel: id={}", id);

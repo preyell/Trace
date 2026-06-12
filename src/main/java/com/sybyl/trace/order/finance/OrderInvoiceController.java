@@ -4,8 +4,11 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import org.springframework.core.io.Resource;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -68,8 +71,8 @@ public class OrderInvoiceController {
                     conversionRate,
                     finalInvoice,
                     file,
-                    me.getUser(),
-                    actorIp
+                    me.getUser()
+                    
             );
             ra.addFlashAttribute("message", "Invoice added.");
         } catch (Exception e) {
@@ -97,12 +100,11 @@ public class OrderInvoiceController {
                          RedirectAttributes ra,
                          HttpServletRequest request) {
 
-        String actorIp = IpUtils.getClientIp(request);
 
         log.info("Invoice update requested: orderId={}, invoiceId={}, invoiceNumber={}, actor={}, ip={}",
                 orderId, invoiceId, invoiceNumber,
-                me != null && me.getUser() != null ? me.getUser().getUsername() : "SYSTEM",
-                actorIp);
+                me != null && me.getUser() != null ? me.getUser().getUsername() : "SYSTEM"
+                );
 
         try {
             service.update(
@@ -119,8 +121,8 @@ public class OrderInvoiceController {
                     conversionRate,
                     finalInvoice,
                     file,
-                    me != null ? me.getUser() : null,
-                    actorIp
+                    me != null ? me.getUser() : null
+                    
             );
             ra.addFlashAttribute("message", "Invoice updated.");
         } catch (IOException | RuntimeException e) {
@@ -139,15 +141,14 @@ public class OrderInvoiceController {
                          RedirectAttributes ra,
                          HttpServletRequest request) {
 
-        String actorIp = IpUtils.getClientIp(request);
 
         log.warn("Invoice delete requested: orderId={}, invoiceId={}, deleteFile={}, actor={}, ip={}",
                 orderId, invoiceId, deleteFile,
-                me != null && me.getUser() != null ? me.getUser().getUsername() : "SYSTEM",
-                actorIp);
+                me != null && me.getUser() != null ? me.getUser().getUsername() : "SYSTEM"
+                );
 
         try {
-            service.delete(orderId, invoiceId, deleteFile, me != null ? me.getUser() : null, actorIp);
+            service.delete(orderId, invoiceId, deleteFile, me != null ? me.getUser() : null);
             ra.addFlashAttribute("message", "Invoice deleted successfully.");
         } catch (Exception e) {
             log.error("Invoice delete failed: orderId={}, invoiceId={}", orderId, invoiceId, e);
@@ -155,5 +156,11 @@ public class OrderInvoiceController {
         }
 
         return "redirect:/orders/" + orderId + "?tab=finance";
+    }
+    
+    @GetMapping("/{invoiceId}/download")
+    public ResponseEntity<Resource> download(@PathVariable Long orderId,
+                                             @PathVariable Long invoiceId) {
+        return service.download(orderId, invoiceId);
     }
 }

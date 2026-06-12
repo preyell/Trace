@@ -24,10 +24,19 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 	        """)
 	    Page<AppUser> search(@Param("q") String q, Pageable pageable);
   
-  @Query("select u from AppUser u join u.roles r where r = com.sybyl.trace.user.AppRole.SALES_MANAGER")
+  @Query("select u from AppUser u join u.roles r where r = com.sybyl.trace.user.AppRole.SALES_MANAGER and u.enabled = true")
   List<AppUser> findAllSalesManagers();
   Optional<AppUser> findByEmailIgnoreCase(String email);
   
   List<AppUser> findByRoles(AppRole role);
 
+  
+  @Query("""
+	        SELECT (
+	            (SELECT COUNT(o) FROM Order o WHERE o.salesManager.id = :userId OR o.createdBy.id = :userId) +
+	            (SELECT COUNT(m) FROM MarginReport m WHERE m.uploadedBy.id = :userId OR m.approvedBy.id = :userId OR m.financeApprovedBy.id = :userId OR m.ceoApprovedBy.id = :userId) +
+	            (SELECT COUNT(e) FROM AdditionalExpense e WHERE e.uploadedBy.id = :userId OR e.ceoApprovedBy.id = :userId OR e.cfoApprovedBy.id = :userId OR e.rejectedBy.id = :userId)
+	        )
+	    """)
+	    long countAllSystemReferences(@Param("userId") Long userId);
 }

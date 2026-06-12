@@ -1,4 +1,4 @@
-package com.sybyl.trace.security.otp;
+package com.sybyl.trace.security;
 
 import org.springframework.stereotype.Service;
 

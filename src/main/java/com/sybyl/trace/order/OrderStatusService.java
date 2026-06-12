@@ -74,10 +74,10 @@ public class OrderStatusService {
 
         switch (expStatus) {
             case WAITING:
-                return logAndReturn(orderId, "EXP_WAITING", OrderStatusView.EXP_WAITING);
+                return logAndReturn(orderId, "EXP_CEO_PENDING", OrderStatusView.EXP_CEO_PENDING);
 
             case CEO_APPROVED:
-                return logAndReturn(orderId, "EXP_CEO_APPROVED", OrderStatusView.EXP_CEO_APPROVED);
+                return logAndReturn(orderId, "EXP_CFO_PENDING", OrderStatusView.EXP_CFO_PENDING);
 
             case CFO_APPROVED:
                 return logAndReturn(orderId, "EXP_CFO_APPROVED", OrderStatusView.EXP_CFO_APPROVED);

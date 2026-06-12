@@ -2,15 +2,16 @@
 <%@ taglib prefix="fmt" uri="http://java.sun.com/jsp/jstl/fmt"%>
 
 <h6 class="mb-3">
-	Audit trail - MR #${mr.id} <small class="text-muted">(${mr.fileName})</small>
+	<c:out value="${mr.vertical.name}" /> <small class="text-muted">(${mr.fileName})</small>
 </h6>
 
 <table class="table table-sm">
 	<thead>
 		<tr>
-			<th style="width: 160px">When</th>
-			<th style="width: 110px">Action</th>
-			<th style="width: 220px">Actor</th>
+			<th>When</th>
+			<th>Action</th>
+			<th>Actor</th>
+			<th>Comments</th>
 			<th>Note</th>
 		</tr>
 	</thead>
@@ -33,7 +34,7 @@
 									<jsp:setProperty name="actedOnDate" property="time"
 										value="${a.actedOn.toEpochMilli()}" />
 									<fmt:formatDate value="${actedOnDate}"
-										pattern="yyyy-MM-dd HH:mm" timeZone="Africa/Kampala" />
+										pattern="yyyy-MM-dd HH:mm" timeZone="Africa/Nairobi" />
 								</c:when>
 								<c:otherwise>-</c:otherwise>
 							</c:choose></td>
@@ -41,6 +42,7 @@
 						<td><c:out value="${a.action}" /></td>
 						<td><c:out
 								value="${a.actor != null ? a.actor.firstName : a.actorId}" /></td>
+								<td><c:out value="${a.comments}" /></td>
 						<td><c:out value="${a.note}" /></td>
 					</tr>
 				</c:forEach>

@@ -186,15 +186,6 @@
 				</div>
 			</c:if>
 
-			<!-- Send activation (create only) -->
-			<c:if test="${mode ne 'edit'}">
-				<div class="form-check mb-3">
-					<input class="form-check-input" type="checkbox" id="sendActivation"
-						name="sendActivation" checked> <label
-						class="form-check-label" for="sendActivation">Send
-						activation email</label>
-				</div>
-			</c:if>
 
 			<div class="d-flex">
 				<button class="btn btn-primary mr-2" type="submit">

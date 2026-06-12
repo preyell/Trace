@@ -30,15 +30,13 @@ public class AppAuditService {
             String action,       // "DELETE", "CREATE", "DISBURSE", ...
             String message,      // "Deleted additional expense 5 on order 10"
             String detailsJson,  // optional JSON or null
-            AppUser actor,       // can be null
-            String actorIp       // can be null
+            AppUser actor     // can be null
     ) {
         if (log.isDebugEnabled()) {
             log.debug("Creating audit event: entityType={}, entityId={}, orderId={}, action={}, actor={}, ip={}",
                     entityType, entityId, orderId,
                     action,
-                    actor != null ? actor.getUsername() : "SYSTEM",
-                    actorIp);
+                    actor != null ? actor.getUsername() : "SYSTEM");
         }
 
         AppAuditLog e = new AppAuditLog();
@@ -58,7 +56,6 @@ public class AppAuditService {
             e.setActorDisplayName("System");
         }
 
-        e.setActorIp(actorIp);
 
         repo.save(e);
 
@@ -69,7 +66,6 @@ public class AppAuditService {
                 entityId,
                 orderId,
                 e.getActorUsername(),
-                actorIp,
                 message);
     }
 

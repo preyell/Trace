@@ -50,6 +50,7 @@ public class Order {
 
 	@ManyToOne(optional = false, fetch = FetchType.LAZY)
 	private Customer customer;
+	
 
 	@Column(length = 500)
 	private String description;

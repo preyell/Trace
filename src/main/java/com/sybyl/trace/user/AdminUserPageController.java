@@ -38,15 +38,13 @@ public class AdminUserPageController {
 	private final AppUserRepository users;
 	private final VerticalRepository verticals;
 	private final UserAdminService userService;
-	private final ActivationService activationService;
 	private final AppAuditService auditService;
 
 	public AdminUserPageController(AppUserRepository users, VerticalRepository verticals, UserAdminService userService,
-			ActivationService activationService, AppAuditService auditService) {
+			AppAuditService auditService) {
 		this.users = users;
 		this.verticals = verticals;
 		this.userService = userService;
-		this.activationService = activationService;
 		this.auditService = auditService;
 	}
 
@@ -122,12 +120,11 @@ public class AdminUserPageController {
 
 			// audit log
 			AppUser actor = (me != null) ? me.getUser() : null;
-			String actorIp = request != null ? request.getRemoteAddr() : null;
 
 			auditService.logEvent("USER", null, // we don't have the new ID here; repository/service can be enhanced
 												// later
 					null, "CREATE", "Created user with username=" + form.getUsername() + ", email=" + form.getEmail(),
-					null, actor, actorIp);
+					null, actor);
 
 			log.info("User created successfully: username={}", form.getUsername());
 			return "redirect:/admin/users?created=true";
@@ -210,8 +207,6 @@ public class AdminUserPageController {
 		AppUser actor = (me != null) ? me.getUser() : null;
 		String actorIp = request != null ? request.getRemoteAddr() : null;
 
-		auditService.logEvent("USER", id, null, "UPDATE", "Updated user with username=" + form.getUsername(), null,
-				actor, actorIp);
 
 		log.info("User updated successfully: id={}, username={}", id, form.getUsername());
 		return "redirect:/admin/users?updated=true";
@@ -219,53 +214,30 @@ public class AdminUserPageController {
 
 	// DELETE
 	@PostMapping("/{id}/delete")
-	public String delete(@PathVariable Long id, @AuthenticationPrincipal MyUserDetails me, HttpServletRequest request,
-			RedirectAttributes ra) {
+	public String delete(@PathVariable Long id, 
+	                     @AuthenticationPrincipal MyUserDetails me, 
+	                     HttpServletRequest request,
+	                     RedirectAttributes ra) {
 
-		log.info("Delete user requested: id={}", id);
+	    log.info("Delete user requested: id={}", id);
 
-		AppUser target = users.findById(id).orElse(null);
-		String targetUsername = (target != null) ? target.getUsername() : ("id=" + id);
-		try {
-			userService.deleteUser(id);
-			ra.addFlashAttribute("message", "User deleted.");
-			AppUser actor = (me != null) ? me.getUser() : null;
-			String actorIp = request != null ? request.getRemoteAddr() : null;
-
-			auditService.logEvent("USER", id, null, "DELETE", "Deleted user " + targetUsername, null, actor, actorIp);
-
-			log.info("User deleted successfully: {}", targetUsername);
-		} catch (IllegalStateException ex) {
-			ra.addFlashAttribute("error", ex.getMessage());
-		}
-
-		return "redirect:/admin/users?deleted=true";
+	    try {
+	        userService.deleteUser(id);
+	        ra.addFlashAttribute("successMessage", "User account removed successfully from the system.");
+	        
+	    } catch (IllegalStateException ex) {
+	        // Catches both the Admin protection rule and our historical reference error text
+	        log.info("Deletion request rejected by database dependency engine for user id: {}", id);
+	        ra.addFlashAttribute("warningMessage", ex.getMessage());
+	        
+	    } catch (Exception ex) {
+	        log.error("Unexpected failure handling deletion context for user id: {}", id, ex);
+	        ra.addFlashAttribute("errorMessage", "An unexpected system error occurred while removing the user profile.");
+	    }
+	    
+	    return "redirect:/admin/users";
 	}
 
-	// RESEND ACTIVATION
-	@PostMapping("/{id}/resend-activation")
-	public String resend(@PathVariable Long id, @AuthenticationPrincipal MyUserDetails me, HttpServletRequest request) {
-
-		log.info("Resend activation requested for user id={}", id);
-
-		AppUser u = users.findById(id).orElseThrow();
-		if (!u.isEnabled()) {
-			var token = activationService.createTokenFor(u);
-			userService.publishActivationEmail(u, token.getToken()); // helper to publish event
-
-			AppUser actor = (me != null) ? me.getUser() : null;
-			String actorIp = request != null ? request.getRemoteAddr() : null;
-
-			auditService.logEvent("USER", id, null, "RESEND_ACTIVATION",
-					"Resent activation email for user " + u.getUsername(), null, actor, actorIp);
-
-			log.info("Activation email resent for user id={}, username={}", id, u.getUsername());
-		} else {
-			log.debug("Activation not resent for user id={} because user is already enabled", id);
-		}
-
-		return "redirect:/admin/users?activationResent=true";
-	}
 
 	// Ensures the JSP Spring form always has a backing bean
 	@ModelAttribute("search")

@@ -5,11 +5,13 @@ import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,7 +33,6 @@ import com.sybyl.trace.order.Order;
 import com.sybyl.trace.order.margin.MarginReportService;
 import com.sybyl.trace.security.MyUserDetails;
 import com.sybyl.trace.user.AppRole;
-import com.sybyl.trace.web.IpUtils;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -66,9 +67,8 @@ public class AdditionalExpenseController {
                          RedirectAttributes ra) throws IOException {
 
         try {
-            String actorIp = IpUtils.getClientIp(request);
             service.create(orderId, me.getUser(), labelId, amount, currency,
-                    conversionRate, verticalId, comments, file, actorIp);
+                    conversionRate, verticalId, comments, file);
             ra.addFlashAttribute("message", "Additional expense added.");
         } catch (IllegalStateException ex) {
             ra.addFlashAttribute("error", ex.getMessage());
@@ -77,33 +77,7 @@ public class AdditionalExpenseController {
         return "redirect:/orders/" + orderId + "?tab=margin#additional-expenses";
     }
 
-    /* =========================================================
-       UPDATE
-       ========================================================= */
-    @PostMapping("/{expId}/update")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_CEO','ROLE_CFO')")
-    public String update(@PathVariable Long orderId,
-                         @PathVariable Long expId,
-                         @RequestParam Long labelId,
-                         @RequestParam BigDecimal amount,
-                         @RequestParam CurrencyCode currency,
-                         @RequestParam BigDecimal conversionRate,
-                         @RequestParam Long verticalId,
-                         @RequestParam String comments,
-                         @RequestParam(required = false) MultipartFile file,
-                         @AuthenticationPrincipal MyUserDetails me,
-                         HttpServletRequest request,
-                         RedirectAttributes ra) {
-
-        String actorIp = IpUtils.getClientIp(request);
-        service.update(orderId, expId, me.getUser(),
-                labelId, amount, currency, conversionRate,
-                verticalId, comments, actorIp, file);
-
-        ra.addFlashAttribute("message", "Additional expense updated.");
-        return "redirect:/orders/" + orderId + "?tab=margin";
-    }
-
+    
     /* =========================================================
        DELETE
        ========================================================= */
@@ -116,8 +90,7 @@ public class AdditionalExpenseController {
                          HttpServletRequest request,
                          RedirectAttributes ra) throws IOException {
 
-        String actorIp = IpUtils.getClientIp(request);
-        service.delete(orderId, expId, me.getUser(), deleteFile, actorIp, request);
+        service.delete(orderId, expId, me.getUser(), deleteFile, request);
 
         ra.addFlashAttribute("message", "Additional expense deleted.");
         return "redirect:/orders/" + orderId + "?tab=margin";
@@ -129,6 +102,8 @@ public class AdditionalExpenseController {
     @PostMapping("/{expenseId}/approve/ceo")
     public String approveCeo(@PathVariable Long orderId,
                              @PathVariable Long expenseId,
+                             @RequestParam(required = false) String note,
+                             @RequestParam(required = true) String comments,
                              @AuthenticationPrincipal MyUserDetails me,
                              HttpServletRequest request,
                              RedirectAttributes ra) {
@@ -137,8 +112,7 @@ public class AdditionalExpenseController {
             throw new AccessDeniedException("CEO/Admin only");
         }
 
-        String actorIp = IpUtils.getClientIp(request);
-        service.ceoApprove(orderId, expenseId, me.getUser(), null, actorIp);
+        service.ceoApprove(orderId, expenseId, me.getUser(), note, comments);
 
         ra.addFlashAttribute("message", "Expense CEO-approved.");
         return "redirect:/orders/" + orderId + "?tab=margin";
@@ -147,6 +121,8 @@ public class AdditionalExpenseController {
     @PostMapping("/{expenseId}/approve/cfo")
     public String approveCfo(@PathVariable Long orderId,
                              @PathVariable Long expenseId,
+                             @RequestParam(required = false) String note,
+                             @RequestParam(required = true) String comments,
                              @AuthenticationPrincipal MyUserDetails me,
                              HttpServletRequest request,
                              RedirectAttributes ra) {
@@ -155,8 +131,7 @@ public class AdditionalExpenseController {
             throw new AccessDeniedException("CFO/Admin only");
         }
 
-        String actorIp = IpUtils.getClientIp(request);
-        service.cfoApprove(orderId, expenseId, me.getUser(), null, actorIp);
+        service.cfoApprove(orderId, expenseId, me.getUser(), note, comments);
 
         ra.addFlashAttribute("message", "Expense CFO-approved.");
         return "redirect:/orders/" + orderId + "?tab=margin";
@@ -165,7 +140,8 @@ public class AdditionalExpenseController {
     @PostMapping("/{expenseId}/reject")
     public String reject(@PathVariable Long orderId,
                          @PathVariable Long expenseId,
-                         @RequestParam String reason,
+                         @RequestParam(required = false) String note,
+                         @RequestParam(required = true) String comments,
                          @AuthenticationPrincipal MyUserDetails me,
                          HttpServletRequest request,
                          RedirectAttributes ra) {
@@ -176,8 +152,7 @@ public class AdditionalExpenseController {
             throw new AccessDeniedException("CEO/CFO/Admin only");
         }
 
-        String actorIp = IpUtils.getClientIp(request);
-        service.reject(orderId, expenseId, me.getUser(), reason, actorIp);
+        service.reject(orderId, expenseId, me.getUser(), comments);
 
         ra.addFlashAttribute("message", "Expense rejected.");
         return "redirect:/orders/" + orderId + "?tab=margin";
@@ -192,25 +167,29 @@ public class AdditionalExpenseController {
                           @RequestParam BigDecimal amount,
                           @RequestParam CurrencyCode currency,
                           @RequestParam(required = false) BigDecimal conversionRate,
-                          @RequestParam(required = false) String note,
+                          @RequestParam(required = true) String comments,
+                          @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate consumedOn,
                           @AuthenticationPrincipal MyUserDetails me,
                           HttpServletRequest request,
                           RedirectAttributes ra) {
 
-        String actorIp = IpUtils.getClientIp(request);
 
         try {
-            service.disburse(orderId, expenseId, amount, currency,
-                    conversionRate, note, me.getUser(), actorIp);
+            service.disburse(orderId, expenseId, amount, currency, conversionRate, me.getUser(), comments, consumedOn);
             ra.addFlashAttribute("message", "Consumption captured successfully.");
-        } catch (IllegalStateException ex) {
+
+        } catch (IllegalArgumentException | IllegalStateException ex) {
             ra.addFlashAttribute("expenseError", ex.getMessage());
             ra.addFlashAttribute("openConsumeExpenseId", expenseId);
+
+            ra.addFlashAttribute("consumeAmount", amount);
+            ra.addFlashAttribute("consumeCurrency", currency);
+            ra.addFlashAttribute("consumeConversionRate", conversionRate);
+            ra.addFlashAttribute("consumeNote", comments);
         }
 
         return "redirect:/orders/" + orderId + "?tab=margin";
     }
-
     /* =========================================================
        DISBURSEMENTS (AJAX)
        ========================================================= */
@@ -228,8 +207,7 @@ public class AdditionalExpenseController {
                                      HttpServletRequest request,
                                      RedirectAttributes ra) {
 
-        String actorIp = IpUtils.getClientIp(request);
-        service.deleteDisbursement(orderId, expId, id, me.getUser(), actorIp);
+        service.deleteDisbursement(orderId, expId, id, me.getUser());
 
         ra.addFlashAttribute("message", "Consumption deleted.");
         return "redirect:/orders/" + orderId + "?tab=margin";
@@ -240,6 +218,8 @@ public class AdditionalExpenseController {
        ========================================================= */
     @GetMapping("/{expenseId}/audits")
     public String audits(@PathVariable Long expenseId, Model model) {
+    	AdditionalExpense ex = service.getById(expenseId);
+    	model.addAttribute("ex", ex);
         model.addAttribute("audits", service.audits(expenseId));
         return "margin_report/expense_audits";
     }

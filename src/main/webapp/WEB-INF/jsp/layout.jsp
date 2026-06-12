@@ -125,8 +125,7 @@
 						<c:set var="isOrders" value="${fn:startsWith(path, '/orders')}" />
 						<c:set var="isExpensesOverview"
 							value="${fn:startsWith(path, '/reports/expenses')}" />
-						<c:set var="isChangePassword"
-							value="${fn:startsWith(path, '/account/change-password')}" />
+						
 
 						<li class="nav-item"><a href="${ctx}/orders"
 							class="nav-link ${isOrders ? 'active' : ''}"> <i
@@ -135,23 +134,22 @@
 						</a></li>
 
 						<sec:authorize
-							access="hasAnyAuthority('ROLE_ADMIN','ROLE_CEO','ROLE_FINANCE_APPROVER','ROLE_FINANCE','ROLE_CFO')">
+							access="hasRole('ROLE_ADMIN')">
 								<li class="nav-item"><a href="${ctx}/admin/audit-log"
 								class="nav-link ${isAudits ? 'active' : ''}"> <i
 									class="nav-icon fa fa-list"></i>
 									<p>Audit Log</p>
 							</a></li>
+							</sec:authorize>
+							<sec:authorize
+							access="hasAnyRole('ROLE_ADMIN','ROLE_CEO','ROLE_FINANCE_APPROVER','ROLE_FINANCE','ROLE_CFO')">
 							<li class="nav-item"><a href="${ctx}/reports/expenses"
 								class="nav-link ${isExpensesOverview ? 'active' : ''}"> <i
 									class="nav-icon fa fa-list"></i>
 									<p>Expense Overview</p>
 							</a></li>
-							<li class="nav-item"><a
-								href="${ctx}/account/change-password"
-								class="nav-link ${isChangePassword ? 'active' : ''}"> <i
-									class="fa fa-key mr-1"></i> <p>Change Password</p>
-							</a></li>
-						</sec:authorize>
+							</sec:authorize>
+							
 
 
 					</ul>

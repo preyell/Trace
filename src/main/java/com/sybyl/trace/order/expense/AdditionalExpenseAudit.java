@@ -17,7 +17,7 @@ public class AdditionalExpenseAudit {
 	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "expense_id", nullable = false)
+	@JoinColumn(name = "expense_id", nullable = true)
 	private AdditionalExpense expense;
 	@ManyToOne(fetch = FetchType.EAGER)
 	private AppUser actor;
@@ -28,6 +28,9 @@ public class AdditionalExpenseAudit {
 	private String note;
 	@Column(nullable = false)
 	private Instant actedOn;
+	
+	@Column(name = "comments", length = 1000)
+	private String comments;
 
 	@jakarta.persistence.Transient
 	public java.util.Date getActedOnDate() {

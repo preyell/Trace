@@ -17,6 +17,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import lombok.Getter;
@@ -58,9 +59,22 @@ public class AdditionalExpenseDisbursement {
 
 	@Column(name = "note", columnDefinition = "text")
 	private String note;
-	
-	  @Transient
-	  public java.util.Date getDisbursedOnDate() {
-	      return disbursedOn == null ? null : java.util.Date.from(disbursedOn);
-	  }
+
+	@Transient
+	public java.util.Date getDisbursedOnDate() {
+		return disbursedOn == null ? null : java.util.Date.from(disbursedOn);
+	}
+
+	@Column(name = "created_at", updatable = false)
+	private Instant createdAt;
+
+	@PrePersist
+	protected void onCreate() {
+		this.createdAt = Instant.now();
+	}
+
+	@Transient
+	public java.util.Date getCreatedAtDate() {
+		return createdAt == null ? null : java.util.Date.from(createdAt);
+	}
 }

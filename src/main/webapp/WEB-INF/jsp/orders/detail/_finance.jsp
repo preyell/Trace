@@ -69,7 +69,7 @@
 										</c:choose></td>
 									<td><c:if test="${not empty inv.fileName}">
 											<a
-												href="${pageContext.request.contextPath}/files/invoices/${inv.id}"
+												href="${pageContext.request.contextPath}/orders/${order.id}/invoices/${inv.id}/download"
 												target="_blank"> <i class="fa fa-paperclip mr-1"></i> <c:out
 													value="${inv.fileName}" />
 											</a>

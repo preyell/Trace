@@ -1,7 +1,47 @@
 <%@ include file="/WEB-INF/jsp/common/taglibs.jsp"%>
 <%@ taglib prefix="fmt" uri="http://java.sun.com/jsp/jstl/fmt"%>
-<table class="table mb-0">
-	<thead>
+<style>
+/* Scrollable table container maintaining fixed/sticky header */
+.table-scroll-container {
+    max-height: 550px; /* Adjust height limit as preferred */
+    overflow-y: auto;
+    overflow-x: auto;
+    position: relative;
+}
+
+/* Ensures borders connect properly when headers are sticky */
+.table-scroll-container table {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+}
+
+/* Styled sticky headers to match finance/margin design rules */
+.table-scroll-container thead th {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    background-color: #f8f9fa; /* Uniform clear background fill */
+    z-index: 10;
+    border-top: 1px solid #dee2e6 !important;
+    border-bottom: 2px solid #dee2e6 !important;
+}
+
+/* Maintains solid vertical lines even during scrolling movements */
+.table-scroll-container th, 
+.table-scroll-container td {
+    border-left-width: 0;
+    border-right: 1px solid #dee2e6;
+}
+.table-scroll-container table {
+    border-left: 1px solid #dee2e6;
+}
+</style>
+
+<div class="table-responsive"
+	style="overflow-x: auto; white-space: nowrap;">
+	<table class="table table-bordered mb-0">
+		<thead class="thead-light">
 		<tr>
 			<th style="width: 160px;">Sales Order ID</th>
 			<!-- renamed -->
@@ -63,8 +103,8 @@
 								<c:when
 									test="${o.statusCode == 'MR_FINANCE_PENDING'
                            or o.statusCode == 'MR_CEO_PENDING'
-                           or o.statusCode == 'EXP_WAITING'
-                           or o.statusCode == 'EXP_CEO_APPROVED'}">
+                           or o.statusCode == 'EXP_CEO_PENDING'
+                           or o.statusCode == 'EXP_CFO_PENDING'}">
 									<span class="badge badge-warning"> <c:out
 											value="${o.statusLabel}" />
 									</span>
@@ -129,4 +169,4 @@
 		</c:choose>
 	</tbody>
 </table>
-
+</div>

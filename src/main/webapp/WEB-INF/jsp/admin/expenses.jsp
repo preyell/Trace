@@ -66,6 +66,9 @@
 									</form>
 								</c:otherwise>
 							</c:choose>
+							<button type="button" class="btn btn-sm btn-outline-info" data-toggle="modal" data-target="#editModal${l.id}">
+    Edit
+</button>
 							<form method="post"
 								action="${pageContext.request.contextPath}/admin/expenses/${l.id}/delete"
 								class="d-inline"
@@ -76,6 +79,42 @@
 									${l.system ? 'disabled' : ''}>Delete</button>
 							</form></td>
 					</tr>
+					
+					<div class="modal fade text-left" id="editModal${l.id}" tabindex="-1" role="dialog" aria-labelledby="editModalLabel${l.id}" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="post" action="${pageContext.request.contextPath}/admin/expenses/${l.id}/edit">
+                <input type="hidden" name="${_csrf.parameterName}" value="${_csrf.token}" />
+                
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editModalLabel${l.id}">Edit Label</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" class="form-control" name="name" value="${l.name}" required ${l.system ? 'readonly' : ''} />
+                        <c:if test="${l.system}">
+                            <small class="text-danger">System labels cannot be renamed.</small>
+                        </c:if>
+                    </div>
+                    <div class="form-group mt-3">
+                        <label>Description</label>
+                        <input type="text" class="form-control" name="description" value="${l.description}" />
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 				</c:forEach>
 			</tbody>
 		</table>

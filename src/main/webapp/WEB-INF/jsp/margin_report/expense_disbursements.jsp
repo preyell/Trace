@@ -1,4 +1,4 @@
-<%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core"%>
+<%@ include file="/WEB-INF/jsp/common/taglibs.jsp"%>
 <%@ taglib prefix="fmt" uri="http://java.sun.com/jsp/jstl/fmt"%>
 
 <table class="table table-bordered mb-0">
@@ -6,7 +6,10 @@
 		<tr>
 			<th>Amount</th>
 			<th>Amount (USD)</th>
-			<th>Consumed On</th>
+			<th>Consumed On <small class="d-block text-muted">(User
+					specified)</small></th>
+			<th>Recorded On <small class="d-block text-muted">(System
+					time)</small></th>
 			<th>Consumed By</th>
 			<th>Comments</th>
 			<th style="width: 1%;">Actions</th>
@@ -30,17 +33,22 @@
 						<td><fmt:formatNumber value="${d.amountUsd}" type="number"
 								minFractionDigits="2" maxFractionDigits="2" /></td>
 						<td><fmt:formatDate value="${d.disbursedOnDate}"
-									pattern="yyyy-MM-dd HH:mm" timeZone="Africa/Kampala" /></td>
+								pattern="yyyy-MM-dd HH:mm" timeZone="Africa/Nairobi" /></td>
+						<td><fmt:formatDate value="${d.createdAtDate}"
+								pattern="yyyy-MM-dd HH:mm" timeZone="Africa/Nairobi" /></td>
 						<td><c:out
 								value="${d.actor != null ? (d.actor.firstName.concat(' ').concat(d.actor.lastName)) : '-'}" />
 						</td>
 						<td><c:out value="${d.note}" /></td>
-						<td class="text-right">
+						
+						<td> <sec:authorize
+									access="hasAnyAuthority('ROLE_ADMIN')">
 							<button type="button"
 								class="btn btn-sm btn-outline-danger js-disb-del"
 								data-disbid="${d.id}">
 								<i class="fa fa-trash"></i>
 							</button>
+							</sec:authorize>
 						</td>
 
 					</tr>

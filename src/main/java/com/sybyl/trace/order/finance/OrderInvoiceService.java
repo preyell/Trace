@@ -11,6 +11,11 @@ import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -39,7 +44,7 @@ public class OrderInvoiceService {
 
     @Value("${app.upload.invoices.path:data/invoices}")
     private String uploadPath;
-
+    
     private Path root;
 
     public OrderInvoiceService(OrderInvoiceRepository repo,
@@ -77,8 +82,8 @@ public class OrderInvoiceService {
                                BigDecimal conversionRate,
                                boolean finalInvoice,
                                MultipartFile file,
-                               AppUser actor,
-                               String actorIp) throws IOException {
+                               AppUser actor
+                               ) throws IOException {
 
         Order order = orders.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Order not found"));
@@ -118,8 +123,8 @@ public class OrderInvoiceService {
                 "CREATE",
                 "Created invoice " + saved.getInvoiceNumber() + " for order " + order.getSalesOrderId(),
                 null,
-                actor,
-                actorIp
+                actor
+                
         );
 
         // Notification: finance people should know invoice added/changed
@@ -149,8 +154,7 @@ public class OrderInvoiceService {
                                BigDecimal conversionRate,
                                boolean finalInvoice,
                                MultipartFile file,
-                               AppUser actor,
-                               String actorIp) throws IOException {
+                               AppUser actor) throws IOException {
 
         var inv = repo.findById(invoiceId)
                 .orElseThrow(() -> new IllegalArgumentException("Invoice not found"));
@@ -188,9 +192,10 @@ public class OrderInvoiceService {
                 "UPDATE",
                 "Updated invoice " + saved.getInvoiceNumber() + " for order " + inv.getOrder().getSalesOrderId(),
                 null,
-                actor,
-                actorIp
+                actor
+                
         );
+        
 
         notificationService.notifyRole(
                 AppRole.FINANCE,
@@ -206,7 +211,7 @@ public class OrderInvoiceService {
     }
 
     @Transactional
-    public void delete(Long orderId, Long invoiceId, boolean deleteFile, AppUser actor, String actorIp) throws IOException {
+    public void delete(Long orderId, Long invoiceId, boolean deleteFile, AppUser actor) throws IOException {
         var inv = repo.findById(invoiceId)
                 .orElseThrow(() -> new IllegalArgumentException("Invoice not found"));
 
@@ -233,8 +238,8 @@ public class OrderInvoiceService {
                 "DELETE",
                 "Deleted invoice " + inv.getInvoiceNumber() + " for order " + inv.getOrder().getSalesOrderId(),
                 null,
-                actor,
-                actorIp
+                actor
+                
         );
 
         // No notification on delete by default (avoids spam). If you want, we can add.
@@ -263,5 +268,55 @@ public class OrderInvoiceService {
 
         inv.setFileName(orig);
         inv.setStorageKey(serverName);
+    }
+    
+    @Transactional(readOnly = true)
+    public ResponseEntity<Resource> download(Long orderId, Long invoiceId) {
+
+        // 1) Load invoice + validate it belongs to this order
+        OrderInvoice inv = repo.findById(invoiceId)
+            .orElseThrow(() -> new RuntimeException("Invoice not found."));
+
+        if (inv.getOrder() == null || inv.getOrder().getId() == null || !inv.getOrder().getId().equals(orderId)) {
+            throw new RuntimeException("Invoice does not belong to this order.");
+        }
+
+        // 2) Validate file metadata
+        if (inv.getStorageKey() == null || inv.getStorageKey().isBlank()) {
+            throw new RuntimeException("No file uploaded for this invoice.");
+        }
+        if (inv.getFileName() == null || inv.getFileName().isBlank()) {
+            inv.setFileName("invoice-" + invoiceId); // fallback (or just error)
+        }
+
+        // 3) Resolve file path
+        // Set invoiceDir in application.properties (example below)
+        Path filePath = Paths.get(uploadPath).resolve(inv.getStorageKey()).normalize();
+
+        if (!Files.exists(filePath) || !Files.isReadable(filePath)) {
+            throw new RuntimeException("Invoice file not found on server.");
+        }
+
+        // 4) Build Resource
+        Resource resource;
+        try {
+            resource = new UrlResource(filePath.toUri());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to load invoice file.", e);
+        }
+
+        // 5) Content type (best effort)
+        MediaType contentType = MediaType.APPLICATION_OCTET_STREAM;
+        try {
+            String detected = Files.probeContentType(filePath);
+            if (detected != null) contentType = MediaType.parseMediaType(detected);
+        } catch (Exception ignored) {}
+
+        // 6) Return as attachment
+        String safeName = inv.getFileName().replace("\"", "");
+        return ResponseEntity.ok()
+            .contentType(contentType)
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + safeName + "\"")
+            .body(resource);
     }
 }

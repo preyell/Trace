@@ -89,10 +89,9 @@ public class VerticalController {
 			Vertical saved = service.create(vertical);
 
 			AppUser actor = (me != null) ? me.getUser() : null;
-			String actorIp = (request != null) ? request.getRemoteAddr() : null;
 
 			auditService.logEvent("VERTICAL", saved.getId(), null, "CREATE", "Created vertical: " + saved.getName(),
-					null, actor, actorIp);
+					null, actor);
 
 			ra.addFlashAttribute("message", "Vertical created.");
 			log.info("Vertical created successfully: id={}, name={}", saved.getId(), saved.getName());
@@ -137,10 +136,9 @@ public class VerticalController {
 			Vertical updated = service.update(id, form);
 
 			AppUser actor = (me != null) ? me.getUser() : null;
-			String actorIp = (request != null) ? request.getRemoteAddr() : null;
 
 			auditService.logEvent("VERTICAL", updated.getId(), null, "UPDATE", "Updated vertical: " + updated.getName(),
-					null, actor, actorIp);
+					null, actor);
 
 			ra.addFlashAttribute("message", "Vertical updated.");
 			log.info("Vertical updated successfully: id={}, name={}", updated.getId(), updated.getName());
@@ -179,11 +177,9 @@ public class VerticalController {
 			service.delete(id);
 
 			AppUser actor = (me != null) ? me.getUser() : null;
-			String actorIp = (request != null) ? request.getRemoteAddr() : null;
 			String verticalName = (existing != null ? existing.getName() : "id=" + id);
 
-			auditService.logEvent("VERTICAL", id, null, "DELETE", "Deleted vertical: " + verticalName, null, actor,
-					actorIp);
+			auditService.logEvent("VERTICAL", id, null, "DELETE", "Deleted vertical: " + verticalName, null, actor);
 
 			ra.addFlashAttribute("message", "Vertical deleted.");
 			log.info("Vertical deleted: {}", verticalName);

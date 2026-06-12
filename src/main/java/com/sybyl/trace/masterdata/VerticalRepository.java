@@ -1,5 +1,6 @@
 package com.sybyl.trace.masterdata;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -18,4 +19,5 @@ public interface VerticalRepository extends JpaRepository<Vertical, Long> {
 	             lower(v.description) like lower(concat('%', :q, '%')))
 	    """)
 	    Page<Vertical> search(@Param("q") String q, Pageable pageable);
+  List<Vertical> findByActiveTrue();
 }

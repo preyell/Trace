@@ -1,12 +1,13 @@
 package com.sybyl.trace.order;
 
-import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import com.sybyl.trace.audit.AppAuditService;
+import com.sybyl.trace.notification.EmailService;
 import com.sybyl.trace.order.events.OrderCreatedEvent;
 
 import lombok.extern.slf4j.Slf4j;
@@ -15,14 +16,9 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 public class OrderCreatedListener {
 
-    private final JavaMailSender mailSender;
-    private final AppAuditService auditService;
 
-    public OrderCreatedListener(JavaMailSender mailSender,
-                                AppAuditService auditService) {
-        this.mailSender = mailSender;
-        this.auditService = auditService;
-    }
+    @Autowired
+    private EmailService emailService;
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -38,38 +34,18 @@ public class OrderCreatedListener {
             return;
         }
 
-        try {
-            var msg = new org.springframework.mail.SimpleMailMessage();
-            msg.setTo(e.salesManagerEmail());
-            msg.setSubject("New Order " + e.salesOrderId());
-            msg.setText("""
-                    A new order has been created.
+        // Delegate the email formatting and sending to the dedicated service
+        boolean emailSent = emailService.sendOrderCreatedEmail(
+                e.salesManagerEmail(),
+                e.salesOrderId(),
+                e.customerName(),
+                e.locationLabel(),
+                e.description()
+        );
 
-                    Sales Order ID: %s
-                    Customer      : %s
-                    Location      : %s
-                    Description   : %s
-
-                    Please log in to Trace to review.
-                    """.formatted(
-                    e.salesOrderId(),
-                    e.customerName(),
-                    e.locationLabel(),
-                    e.description() == null ? "" : e.description()
-            ));
-
-            mailSender.send(msg);
-
-            
-
-            log.info("OrderCreatedListener email sent: soid={} to={}",
-                    e.salesOrderId(), e.salesManagerEmail());
-
-        } catch (Exception ex) {
-            log.error("OrderCreatedListener email send failed: soid={} to={}",
-                    e.salesOrderId(), e.salesManagerEmail(), ex);
-
-            
+        if (!emailSent) {
+            log.error("CRITICAL: Failed to notify Sales Manager ({}) for new Order: {}", 
+                    e.salesManagerEmail(), e.salesOrderId());
         }
     }
 }

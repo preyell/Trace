@@ -2,6 +2,7 @@ package com.sybyl.trace.notification;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -32,5 +33,15 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
            """)
     int deleteOldReadBefore(@Param("cutoff") Instant cutoff);
 	
+	@Modifying(clearAutomatically = true, flushAutomatically = true)
+	@Query("""
+	       update Notification n
+	          set n.readFlag = true
+	        where n.recipient = :recipient
+	          and n.readFlag = false
+	       """)
+	int markAllAsReadByRecipient(@Param("recipient") AppUser recipient);
 	
+	
+	Optional<Notification> findByIdAndRecipient(Long id, AppUser recipient);
 }

@@ -93,10 +93,9 @@ public class CustomerAdminController {
 
 			// audit
 			var actor = (me != null) ? me.getUser() : null;
-			String actorIp = (request != null) ? request.getRemoteAddr() : null;
 
 			auditService.logEvent("CUSTOMER", saved.getId(), null, "CREATE", "Created customer: " + saved.getName(),
-					null, actor, actorIp);
+					null, actor);
 
 			ra.addFlashAttribute("message", "Customer created.");
 			log.info("Customer created successfully: id={}, name={}", saved.getId(), saved.getName());
@@ -138,10 +137,9 @@ public class CustomerAdminController {
 			Customer updated = service.update(id, customer);
 
 			var actor = (me != null) ? me.getUser() : null;
-			String actorIp = (request != null) ? request.getRemoteAddr() : null;
 
 			auditService.logEvent("CUSTOMER", updated.getId(), null, "UPDATE", "Updated customer: " + updated.getName(),
-					null, actor, actorIp);
+					null, actor);
 
 			ra.addFlashAttribute("message", "Customer updated.");
 			log.info("Customer updated successfully: id={}, name={}", updated.getId(), updated.getName());
@@ -170,11 +168,10 @@ public class CustomerAdminController {
 			service.delete(id);
 
 			var actor = (me != null) ? me.getUser() : null;
-			String actorIp = (request != null) ? request.getRemoteAddr() : null;
 			String customerName = (existing != null ? existing.getName() : "id=" + id);
 
-			auditService.logEvent("CUSTOMER", id, null, "DELETE", "Deleted customer: " + customerName, null, actor,
-					actorIp);
+			auditService.logEvent("CUSTOMER", id, null, "DELETE", "Deleted customer: " + customerName, null, actor
+					);
 
 			ra.addFlashAttribute("message", "Customer deleted.");
 		} catch (IllegalStateException ex) {

@@ -1,5 +1,6 @@
 package com.sybyl.trace.masterdata;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -20,4 +21,6 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     	             lower(c.phone)       like lower(concat('%', :q, '%')))
     	    """)
     	    Page<Customer> search(@Param("q") String q, Pageable pageable);
+    
+    List<Customer> findByActiveTrue();
 }

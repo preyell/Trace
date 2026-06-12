@@ -27,7 +27,7 @@ public class MarginReportController {
 
     log.info("MarginReport audits requested: mrId={}, page={}, size={}", id, page, size);
 
-    var mr = mrRepo.findById(id)
+    var mr = mrRepo.findByIdWithVertical(id)
             .orElseThrow(() -> {
               log.warn("MarginReport not found for audits: mrId={}", id);
               return new ResponseStatusException(HttpStatus.NOT_FOUND);

@@ -9,7 +9,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
-import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,38 +16,67 @@ import jakarta.servlet.http.HttpSession;
 
 @Configuration
 public class SecurityConfig {
-	 @Bean
-	  SecurityFilterChain securityFilterChain(org.springframework.security.config.annotation.web.builders.HttpSecurity http,
-	                                          AuthenticationSuccessHandler otpSuccessHandler) throws Exception {
-	    // AuthorizationManager that only allows requests if OTP was verified
-	    AuthorizationManager<RequestAuthorizationContext> otpGate = (authentication, context) -> {
-	      HttpServletRequest req = context.getRequest();
-	      HttpSession session = req.getSession(false);
-	      boolean verified = session != null && Boolean.TRUE.equals(session.getAttribute("OTP_VERIFIED"));
-	      return new AuthorizationDecision(verified);
-	    };
-		http.authorizeHttpRequests(auth -> auth
-				// 👇 allow internal forwards to JSPs and error pages
-				.dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
 
-				// your public endpoints
-				.requestMatchers("/login", "/error", "/otp", "/forgot-password", "/reset-password", "/activate", "/activate/**", "/webjars/**", "/resources/**", "/static/**", "/css/**", "/js/**",
-						"/images/**")
-				.permitAll()
-				.requestMatchers("/admin/**").hasRole("ADMIN")
-				.anyRequest().access(otpGate))
-				.formLogin(form -> form.loginPage("/login").loginProcessingUrl("/login") // POST
-						// on username/password success -> generate OTP and redirect to /otp
-				        .successHandler(otpSuccessHandler)																							// action
-						.failureUrl("/login?error=true").permitAll())
-				.logout(logout -> logout.logoutUrl("/logout").logoutSuccessUrl("/login?logout=true").permitAll())
-				.csrf(Customizer.withDefaults());
+    @Bean
+    public SecurityFilterChain securityFilterChain(org.springframework.security.config.annotation.web.builders.HttpSecurity http) throws Exception {
+        
+        AuthorizationManager<RequestAuthorizationContext> otpGate = (authentication, context) -> {
+            HttpServletRequest req = context.getRequest();
+            HttpSession session = req.getSession(false);
+            
+            // Allow access ONLY if the user has been fully programmatically authenticated AND completed OTP verification
+            boolean verified = session != null 
+                    && authentication.get().isAuthenticated() 
+                    && Boolean.TRUE.equals(session.getAttribute("OTP_VERIFIED"));
+            
+            return new AuthorizationDecision(verified);
+        };
 
-		return http.build();
-	}
+        http
+            .authorizeHttpRequests(auth -> auth
+                // Allow internal forwards to JSPs and system error views
+                .dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
 
-	@Bean
-	public PasswordEncoder passwordEncoder() {
-		return new BCryptPasswordEncoder();
-	}
+                .requestMatchers(
+                    "/login", 
+                    "/login/send-otp", 
+                    "/otp", 
+                    "/otp/resend", 
+                    "/error", 
+                    "/webjars/**", 
+                    "/resources/**", 
+                    "/static/**", 
+                    "/css/**", 
+                    "/js/**",
+                    "/images/**"
+                ).permitAll()
+
+                // 3. Admin-restricted endpoints still check roles first
+                .requestMatchers("/admin/**").hasRole("ADMIN")
+
+                // 4. Any other application request (like /orders, /approve, etc.) must clear the OTP Gate
+                .anyRequest().access(otpGate)
+            )
+            // When users go to /login, our custom PasswordlessAuthController intercepts it.
+            .formLogin(form -> form
+                .loginPage("/login")
+                .permitAll()
+            )
+            .logout(logout -> logout
+                .logoutUrl("/logout")
+                .logoutSuccessUrl("/login?logout=true")
+                .invalidateHttpSession(true)
+                .deleteCookies("JSESSIONID")
+                .permitAll()
+            )
+            .csrf(Customizer.withDefaults());
+
+        return http.build();
+    }
+
+    // Keep this defined so that other components/services compiling user entities do not break
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
 }

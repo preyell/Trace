@@ -159,8 +159,10 @@ public class MarginReportService {
 				"New margin report submitted",
 				"Order " + order.getSalesOrderId() + " has a new margin report awaiting Finance approval.", "MARGIN",
 				mr.getId(), "/orders/" + order.getId() + "?tab=margin");
-		audit(saved.getId(), currentUser.getId(), "CREATED", "Created Margin Report");
+		audit(saved.getId(), currentUser.getId(), "CREATED", "Created Margin Report", comments);
 
+		 appAuditService.logEvent("MARGIN_REPORT", mr.getId(), mr.getOrder().getSalesOrderId(), "CREATE",
+		            "Margin report created ", null, currentUser);
 		log.info("Margin report saved: id={}, orderId={}, storageKey='{}'", saved.getId(), orderId,
 				saved.getStorageKey());
 		return saved;
@@ -168,69 +170,88 @@ public class MarginReportService {
 
 	@Transactional
 	public void update(Long orderId, Long marginReportId, BigDecimal buyingPrice, CurrencyCode buyingCurrency,
-			BigDecimal sellingPrice, CurrencyCode sellingCurrency, BigDecimal conversionRate, Long verticalId,
-			String comments, MultipartFile file, AppUser actor, String actorIp) {
+	        BigDecimal sellingPrice, CurrencyCode sellingCurrency, BigDecimal conversionRate, Long verticalId,
+	        String comments, MultipartFile file, AppUser actor) {
 
-		MarginReport mr = repo.findById(marginReportId)
-				.orElseThrow(() -> new IllegalArgumentException("Margin report not found"));
+	    MarginReport mr = repo.findById(marginReportId)
+	            .orElseThrow(() -> new IllegalArgumentException("Margin report not found"));
 
-		if (!mr.getOrder().getId().equals(orderId)) {
-			throw new IllegalArgumentException("Invalid order");
-		}
+	    if (!mr.getOrder().getId().equals(orderId)) {
+	        throw new IllegalArgumentException("Invalid order");
+	    }
 
-		if (mr.getApprovalStatus() == MarginReportApprovalStatus.APPROVED) {
-			throw new IllegalStateException("Approved margin report cannot be edited");
-		}
+	    if (mr.getApprovalStatus() == MarginReportApprovalStatus.APPROVED) {
+	        throw new IllegalStateException("Approved margin report cannot be edited");
+	    }
 
-		boolean changed = false;
+	    boolean changed = false;
+	    StringBuilder diff = new StringBuilder("Updated: ");
 
-		changed |= updateIfChanged(mr.getBuyingPrice(), buyingPrice, mr::setBuyingPrice);
-		changed |= updateIfChanged(mr.getBuyingCurrency(), buyingCurrency, mr::setBuyingCurrency);
-		changed |= updateIfChanged(mr.getSellingPrice(), sellingPrice, mr::setSellingPrice);
-		changed |= updateIfChanged(mr.getSellingCurrency(), sellingCurrency, mr::setSellingCurrency);
-		changed |= updateIfChanged(mr.getConversionRate(), conversionRate, mr::setConversionRate);
+	    // 1. Use the specific BigDecimal helper for money/rates
+	    changed |= updateBigDecimal(mr.getBuyingPrice(), buyingPrice, mr::setBuyingPrice, "Buying Price", diff);
+	    changed |= updateBigDecimal(mr.getSellingPrice(), sellingPrice, mr::setSellingPrice, "Selling Price", diff);
+	    changed |= updateBigDecimal(mr.getConversionRate(), conversionRate, mr::setConversionRate, "FX Rate", diff);
 
-		if (verticalId != null && (mr.getVertical() == null || !mr.getVertical().getId().equals(verticalId))) {
-			mr.setVertical(verticals.findById(verticalId).orElseThrow());
-			changed = true;
-		}
+	    // 2. Use the standard generic helper for standard objects
+	    changed |= updateObject(mr.getBuyingCurrency(), buyingCurrency, mr::setBuyingCurrency, "Buying Currency", diff);
+	    changed |= updateObject(mr.getSellingCurrency(), sellingCurrency, mr::setSellingCurrency, "Selling Currency", diff);
 
-		if (comments != null && !comments.equals(mr.getComments())) {
-			mr.setComments(comments);
-			changed = true;
-		}
+	    // 3. Handle Vertical
+	    if (verticalId != null && (mr.getVertical() == null || !mr.getVertical().getId().equals(verticalId))) {
+	        String oldVert = mr.getVertical() != null ? mr.getVertical().getName() : "None";
+	        mr.setVertical(verticals.findById(verticalId).orElseThrow());
+	        diff.append(String.format("[Vertical: %s -> %s] ", oldVert, mr.getVertical().getName()));
+	        changed = true;
+	    }
 
-		if (file != null && !file.isEmpty()) {
-			storeFile(mr, file, orderId); // your existing file logic
-			changed = true;
-		}
+	    // 4. Handle File
+	    if (file != null && !file.isEmpty()) {
+	        storeFile(mr, file, orderId);
+	        diff.append("[New File Attached] ");
+	        changed = true;
+	    }
 
-		if (!changed) {
-			return; // NO approval reset, NO audit, NO save
-		}
+	    // Stop if nothing changed
+	    if (!changed) {
+	        return; 
+	    }
 
-		mr.setApprovalStatus(MarginReportApprovalStatus.FINANCE_PENDING);
-		mr.setFinanceApprovedBy(null);
-		mr.setFinanceApprovedOn(null);
-		mr.setCeoApprovedBy(null);
-		mr.setCeoApprovedOn(null);
-		mr.setRejectionReason(null);
+	    // Reset workflows
+	    mr.setApprovalStatus(MarginReportApprovalStatus.FINANCE_PENDING);
+	    mr.setFinanceApprovedBy(null);
+	    mr.setFinanceApprovedOn(null);
+	    mr.setCeoApprovedBy(null);
+	    mr.setCeoApprovedOn(null);
+	    mr.setRejectionReason(null);
 
-		repo.save(mr);
+	    repo.save(mr);
 
-		audit(mr.getId(), actor.getId(), "UPDATED", "Margin report updated");
+	    // Log the audit with the dynamic diff string AND the user's manual comment
+	    audit(mr.getId(), actor.getId(), "UPDATED ", diff.toString().trim(), comments);
 
-		appAuditService.logEvent("MARGIN_REPORT", mr.getId(), mr.getOrder().getSalesOrderId(), "UPDATE",
-				"Margin report updated and approval reset", null, actor, actorIp);
+	    appAuditService.logEvent("MARGIN_REPORT", mr.getId(), mr.getOrder().getSalesOrderId(), "UPDATE",
+	            "Margin report updated "+  diff.toString().trim() + " and approval reset", null, actor);
 	}
 
-	private <T> boolean updateIfChanged(T oldVal, T newVal, java.util.function.Consumer<T> setter) {
-		if (oldVal == null && newVal == null)
-			return false;
-		if (oldVal != null && oldVal.equals(newVal))
-			return false;
-		setter.accept(newVal);
-		return true;
+
+	// Helper specifically for BigDecimals to safely ignore trailing zeros
+	private boolean updateBigDecimal(BigDecimal oldVal, BigDecimal newVal, java.util.function.Consumer<BigDecimal> setter, String fieldName, StringBuilder diff) {
+	    if (oldVal == null && newVal == null) return false;
+	    if (oldVal != null && newVal != null && oldVal.compareTo(newVal) == 0) return false;
+
+	    setter.accept(newVal);
+	    diff.append(String.format("[%s: %s -> %s] ", fieldName, oldVal, newVal));
+	    return true;
+	}
+
+	// Helper for standard Enums/Strings/Objects
+	private <T> boolean updateObject(T oldVal, T newVal, java.util.function.Consumer<T> setter, String fieldName, StringBuilder diff) {
+	    if (oldVal == null && newVal == null) return false;
+	    if (oldVal != null && oldVal.equals(newVal)) return false;
+
+	    setter.accept(newVal);
+	    diff.append(String.format("[%s: %s -> %s] ", fieldName, oldVal, newVal));
+	    return true;
 	}
 
 	private void storeFile(MarginReport mr, MultipartFile file, Long orderId) {
@@ -275,7 +296,7 @@ public class MarginReportService {
 	}
 
 	@Transactional
-	public void approveFinance(Long orderId, Long mrId, AppUser actor, String note) {
+	public void approveFinance(Long orderId, Long mrId, AppUser actor, String note, String comments) {
 		var mr = repo.findById(mrId).orElseThrow();
 		ensureOrder(mr, orderId);
 		if (mr.getApprovalStatus() != MarginReportApprovalStatus.FINANCE_PENDING) {
@@ -289,7 +310,7 @@ public class MarginReportService {
 		mr.setRejectionReason(null);
 
 		repo.saveAndFlush(mr);
-		audit(mrId, actor.getId(), "APPROVE_FINANCE", note);
+		audit(mrId, actor.getId(), "APPROVE_FINANCE", note, comments);
 		notificationService.notifyRole(AppRole.CEO, NotificationType.MARGIN_APPROVED_FINANCE,
 				"Margin report approved by Finance",
 				"Margin report for order " + mr.getOrder().getSalesOrderId() + " awaits CEO approval.", "MARGIN",
@@ -298,7 +319,7 @@ public class MarginReportService {
 	}
 
 	@Transactional
-	public void approveCeo(Long orderId, Long mrId, AppUser actor, String note) {
+	public void approveCeo(Long orderId, Long mrId, AppUser actor, String note, String comments) {
 		var mr = repo.findById(mrId).orElseThrow();
 		ensureOrder(mr, orderId);
 		if (mr.getApprovalStatus() != MarginReportApprovalStatus.CEO_PENDING) {
@@ -312,11 +333,11 @@ public class MarginReportService {
 		mr.setRejectionReason(null);
 
 		repo.saveAndFlush(mr);
-		audit(mrId, actor.getId(), "APPROVE_CEO", note);
+		audit(mrId, actor.getId(), "APPROVE_CEO", note, comments);
 	}
 
 	@Transactional
-	public void reject(Long orderId, Long mrId, AppUser actor, String reason) {
+	public void reject(Long orderId, Long mrId, String soid, AppUser actor, String comments) {
 		var mr = repo.findById(mrId).orElseThrow();
 		ensureOrder(mr, orderId);
 
@@ -330,16 +351,33 @@ public class MarginReportService {
 		}
 
 		mr.setApprovalStatus(MarginReportApprovalStatus.REJECTED);
-		mr.setRejectionReason(reason);
+		mr.setRejectionReason(comments);
 
 		repo.saveAndFlush(mr);
-		audit(mr.getId(), actor.getId(), "REJECTED", reason);
+		audit(mr.getId(), actor.getId(), "REJECTED", "Rejected Margin Report for Vertical:" + mr.getVertical().getName() , comments);
+
+        try {
+        	
+            appAuditService.logEvent(
+                    "MARGIN_REPORT",
+                    mrId,
+                    soid,
+                    "REJECT",
+                    "Rejected Margin Report for Verical:" + mr.getVertical().getName() + " Reason: "+ comments,
+                    null,
+                    actor
+                    
+            );
+        } catch (Exception auditEx) {
+            log.error("Audit failed after reject: mrId={}, orderId={}", mrId, orderId, auditEx);
+        }
+
 	}
 
 	/* ========= Delete ========= */
 
 	@Transactional
-	public void delete(Long orderId, Long mrId, AppUser user, boolean deleteFile, String actorIp) throws IOException {
+	public void delete(Long orderId, Long mrId, AppUser user, boolean deleteFile) throws IOException {
 		var mr = repo.findById(mrId).orElseThrow();
 		ensureOrder(mr, orderId);
 
@@ -368,7 +406,7 @@ public class MarginReportService {
 
 		appAuditService.logEvent("MARGIN_REPORT", mrId, mr.getOrder().getSalesOrderId(), "DELETE",
 				"Deleted margin report " + mrId + " (Vertical=" + (verticalId != null ? verticalId : "N/A") + ")", null,
-				user, actorIp);
+				user);
 	}
 
 	/* ========= Helpers ========= */
@@ -392,12 +430,13 @@ public class MarginReportService {
 		}
 	}
 
-	private void audit(Long mrId, Long actorUserId, String action, String note) {
+	private void audit(Long mrId, Long actorUserId, String action, String note, String comments) {
 		var a = new MarginReportAudit();
 		a.setMarginReport(em.getReference(MarginReport.class, mrId));
 		a.setActor(em.getReference(AppUser.class, actorUserId));
 		a.setAction(action);
 		a.setNote(note);
+		a.setComments(comments);
 		a.setActedOn(Instant.now());
 		auditRepo.save(a);
 	}

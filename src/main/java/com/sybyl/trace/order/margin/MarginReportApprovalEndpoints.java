@@ -52,6 +52,7 @@ public class MarginReportApprovalEndpoints {
     public String approveFinance(@PathVariable Long orderId,
                                  @PathVariable Long mrId,
                                  @RequestParam(required = false) String note,
+                                 @RequestParam(required = true) String comments,
                                  @AuthenticationPrincipal MyUserDetails me,
                                  HttpServletRequest request,
                                  RedirectAttributes ra) {
@@ -59,14 +60,13 @@ public class MarginReportApprovalEndpoints {
         AppUser actor = (me != null) ? me.getUser() : null;
 
         try {
-            marginReportService.approveFinance(orderId, mrId, actor, note);
+            marginReportService.approveFinance(orderId, mrId, actor, note, comments);
 
             // Fetch with order to avoid LazyInitializationException
             String soid = safeSalesOrderId(orderId, mrId);
 
             // Audit should never break the approval UX; keep it safe.
             try {
-            	String actorIp = IpUtils.getClientIp(request);
                 appAuditService.logEvent(
                         "MARGIN_REPORT",
                         mrId,
@@ -74,8 +74,8 @@ public class MarginReportApprovalEndpoints {
                         "APPROVE_FINANCE",
                         "Finance approved margin report " + mrId + " for order " + soid,
                         note,
-                        actor,
-                        actorIp
+                        actor
+                        
                 );
             } catch (Exception auditEx) {
                 log.error("Audit failed after finance approval: mrId={}, orderId={}", mrId, orderId, auditEx);
@@ -96,6 +96,7 @@ public class MarginReportApprovalEndpoints {
     public String approveCeo(@PathVariable Long orderId,
                              @PathVariable Long mrId,
                              @RequestParam(required = false) String note,
+                             @RequestParam(required = true) String comments,
                              @AuthenticationPrincipal MyUserDetails me,
                              HttpServletRequest request,
                              RedirectAttributes ra) {
@@ -103,21 +104,20 @@ public class MarginReportApprovalEndpoints {
         AppUser actor = (me != null) ? me.getUser() : null;
 
         try {
-            marginReportService.approveCeo(orderId, mrId, actor, note);
+            marginReportService.approveCeo(orderId, mrId, actor, note, comments);
 
             String soid = safeSalesOrderId(orderId, mrId);
 
             try {
-            	String actorIp = IpUtils.getClientIp(request);
                 appAuditService.logEvent(
                         "MARGIN_REPORT",
                         mrId,
                         soid,
                         "APPROVE_CEO",
                         "CEO approved margin report " + mrId + " for order " + soid,
-                        note,
-                        actor,
-                        actorIp
+                        null,
+                        actor
+                        
                 );
             } catch (Exception auditEx) {
                 log.error("Audit failed after CEO approval: mrId={}, orderId={}", mrId, orderId, auditEx);
@@ -137,7 +137,7 @@ public class MarginReportApprovalEndpoints {
     @PreAuthorize("hasAnyRole('FINANCE','CEO','ADMIN')")
     public String reject(@PathVariable Long orderId,
                          @PathVariable Long mrId,
-                         @RequestParam(required = false) String note,
+                         @RequestParam(required = true) String comments,
                          @AuthenticationPrincipal MyUserDetails me,
                          HttpServletRequest request,
                          RedirectAttributes ra) {
@@ -145,26 +145,9 @@ public class MarginReportApprovalEndpoints {
         AppUser actor = (me != null) ? me.getUser() : null;
 
         try {
-            marginReportService.reject(orderId, mrId, actor, note);
+        	String soid = safeSalesOrderId(orderId, mrId);
+            marginReportService.reject(orderId, mrId, soid, actor, comments);
 
-            String soid = safeSalesOrderId(orderId, mrId);
-
-            try {
-            	
-            	 String actorIp = IpUtils.getClientIp(request);
-                appAuditService.logEvent(
-                        "MARGIN_REPORT",
-                        mrId,
-                        soid,
-                        "REJECT",
-                        "Rejected margin report " + mrId + " for order " + soid,
-                        note,
-                        actor,
-                        actorIp
-                );
-            } catch (Exception auditEx) {
-                log.error("Audit failed after reject: mrId={}, orderId={}", mrId, orderId, auditEx);
-            }
 
             ra.addFlashAttribute("message", "Margin report rejected.");
             return "redirect:/orders/" + orderId + "?tab=margin";

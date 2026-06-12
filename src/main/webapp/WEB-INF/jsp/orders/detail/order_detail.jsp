@@ -39,6 +39,9 @@
   </div>
 </c:if>
 
+<c:if test="${not empty error}">
+	<div class="alert alert-danger">${error}</div>
+</c:if>
 <!-- COMPACT SINGLE-LINE ORDER DETAILS -->
 <div class="card card-outline card-primary mb-2">
   <div class="card-body py-2 px-3 d-flex flex-wrap align-items-center details-bar">

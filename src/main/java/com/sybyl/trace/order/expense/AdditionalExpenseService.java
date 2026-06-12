@@ -9,9 +9,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -87,23 +91,21 @@ public class AdditionalExpenseService {
 		return auditRepo.findByExpenseIdOrderByActedOnDesc(expenseId);
 	}
 
-	@Transactional(readOnly = true)
-	public List<OrderAdditionalExpenseSummaryRow> getOrderExpenseSummary() {
-		log.debug("getOrderExpenseSummary");
-		return repo.findOrderExpenseSummary();
-	}
 
 	@Transactional(readOnly = true)
 	public List<AdditionalExpense> findByOrderWithExpenses(Long orderId) {
 		log.debug("findByOrderWithExpenses: orderId={}", orderId);
-		return repo.findByOrderId(orderId);
+		return repo.findByOrderId(orderId).stream()
+		        .filter(e -> e.getLabel() != null && 
+		                     "Design And Implementation Services".equals(e.getLabel().getName()))
+		        .collect(java.util.stream.Collectors.toList());
 	}
 
 	/* ========================= CREATE ========================= */
 
 	@Transactional
 	public AdditionalExpense create(Long orderId, AppUser user, Long labelId, BigDecimal amount, CurrencyCode currency,
-			BigDecimal conversionRate, Long verticalId, String comments, MultipartFile file, String actorIp)
+			BigDecimal conversionRate, Long verticalId, String comments, MultipartFile file)
 			throws IOException {
 
 		log.info("create additional expense: orderId={}, verticalId={}, actor={}", orderId, verticalId,
@@ -168,12 +170,12 @@ public class AdditionalExpenseService {
 
 		var saved = repo.save(exp);
 
-		audit(saved.getId(), user != null ? user.getId() : null, "CREATED", "Additional expense created");
+		audit(saved.getId(), user != null ? user.getId() : null, "CREATED", "Additional expense created", comments);
 
 		appAuditService.logEvent("ADDITIONAL_EXPENSE", saved.getId(), order.getSalesOrderId(), "CREATE",
-				"Created additional expense " + saved.getId() + " (" + saved.getAmount() + " " + saved.getCurrency()
-						+ ") on order " + order.getSalesOrderId(),
-				null, user, actorIp);
+				"Additional expense: " + saved.getLabel().getName() + " (" + saved.getAmount() + " " + saved.getCurrency()
+						+ ") with comments " + comments,
+				null, user);
 
 		notificationService.notifyRole(AppRole.CEO, NotificationType.EXPENSE_CREATED,
 				"Additional expense submitted",
@@ -186,7 +188,7 @@ public class AdditionalExpenseService {
 	/* ========================= APPROVALS ========================= */
 
 	@Transactional
-	public void ceoApprove(Long orderId, Long expenseId, AppUser actor, String note, String actorIp) {
+	public void ceoApprove(Long orderId, Long expenseId, AppUser actor, String note, String comments) {
 		log.info("ceoApprove: orderId={}, expenseId={}, actor={}", orderId, expenseId,
 				actor != null ? actor.getUsername() : "SYSTEM");
 
@@ -198,12 +200,11 @@ public class AdditionalExpenseService {
 		e.setCeoApprovedBy(actor);
 		e.setCeoApprovedOn(Instant.now());
 
-		audit(e.getId(), actor != null ? actor.getId() : null, "CEO_APPROVED", note);
+		audit(e.getId(), actor != null ? actor.getId() : null, "CEO_APPROVED", note, comments);
 
 		appAuditService.logEvent("ADDITIONAL_EXPENSE", expenseId, e.getOrder().getSalesOrderId(), "CEO_APPROVE",
-				"CEO approved additional expense " + expenseId + " on order " + e.getOrder().getSalesOrderId()
-						+ (note != null && !note.isBlank() ? (". Note: " + note) : ""),
-				null, actor, actorIp);
+				comments,
+				null, actor);
 
 		// NOTIFICATION: move to CFO
 		notificationService.notifyRole(AppRole.CFO, NotificationType.EXPENSE_APPROVED_CEO, "Expense awaiting CFO approval",
@@ -212,7 +213,7 @@ public class AdditionalExpenseService {
 	}
 
 	@Transactional
-	public void cfoApprove(Long orderId, Long expenseId, AppUser actor, String note, String actorIp) {
+	public void cfoApprove(Long orderId, Long expenseId, AppUser actor, String note, String comments) {
 		log.info("cfoApprove: orderId={}, expenseId={}, actor={}", orderId, expenseId,
 				actor != null ? actor.getUsername() : "SYSTEM");
 
@@ -224,39 +225,38 @@ public class AdditionalExpenseService {
 		e.setCfoApprovedBy(actor);
 		e.setCfoApprovedOn(Instant.now());
 
-		audit(e.getId(), actor != null ? actor.getId() : null, "CFO_APPROVED", note);
+		audit(e.getId(), actor != null ? actor.getId() : null, "CFO_APPROVED", note, comments);
 
 		appAuditService.logEvent("ADDITIONAL_EXPENSE", expenseId, e.getOrder().getSalesOrderId(), "CFO_APPROVE",
-				"CFO approved additional expense " + expenseId + " on order " + e.getOrder().getSalesOrderId()
-						+ (note != null && !note.isBlank() ? (". Note: " + note) : ""),
-				null, actor, actorIp);
+				comments,
+				null, actor);
 
 
 	}
 
 	@Transactional
-	public void reject(Long orderId, Long expenseId, AppUser actor, String reason, String actorIp) {
+	public void reject(Long orderId, Long expenseId, AppUser actor, String comments) {
 		log.warn("reject: orderId={}, expenseId={}, actor={}, reason={}", orderId, expenseId,
-				actor != null ? actor.getUsername() : "SYSTEM", reason);
+				actor != null ? actor.getUsername() : "SYSTEM", comments);
 
 		var e = mustLoad(orderId, expenseId);
 
 		e.setApprovalStatus(AdditionalExpenseStatus.REJECTED);
 		e.setRejectedBy(actor);
 		e.setRejectedOn(Instant.now());
-		e.setRejectionReason(reason);
+		e.setRejectionReason(comments);
 
-		audit(e.getId(), actor != null ? actor.getId() : null, "REJECTED", reason);
+		audit(e.getId(), actor != null ? actor.getId() : null, "REJECTED", "Rejected additional expense of " + e.getAmount(), comments);
 
 		appAuditService.logEvent("ADDITIONAL_EXPENSE", expenseId, e.getOrder().getSalesOrderId(), "REJECT",
-				"Rejected additional expense " + expenseId + " on order " + e.getOrder().getSalesOrderId()
-						+ ". Reason: " + reason,
-				null, actor, actorIp);
+				"Rejected additional expense of " + e.getAmount() + " on order " + e.getOrder().getSalesOrderId()
+						+ ". Reason: " + comments,
+				null, actor);
 
 		// NOTIFICATION: tell uploader
 		if (e.getUploadedBy() != null) {
 			notificationService.notifyUser(e.getUploadedBy(), NotificationType.EXPENSE_REJECTED, "Expense rejected",
-					reason, "ADDITIONAL_EXPENSE", expenseId, "/orders/" + orderId + "?tab=margin");
+					comments, "ADDITIONAL_EXPENSE", expenseId, "/orders/" + orderId + "?tab=margin");
 		}
 	}
 
@@ -264,7 +264,7 @@ public class AdditionalExpenseService {
 
 	@Transactional
 	public AdditionalExpenseDisbursement disburse(Long orderId, Long expenseId, BigDecimal amount,
-			CurrencyCode currency, BigDecimal conversionRate, String note, AppUser actor, String actorIp) {
+			CurrencyCode currency, BigDecimal conversionRate, AppUser actor, String comments, LocalDate consumedOn) {
 
 		log.info("disburse: orderId={}, expenseId={}, amount={} {}, actor={}", orderId, expenseId, amount, currency,
 				actor != null ? actor.getUsername() : "SYSTEM");
@@ -288,17 +288,26 @@ public class AdditionalExpenseService {
 		BigDecimal fxForThisDisb;
 
 		if (currency == CurrencyCode.USD) {
-			fxForThisDisb = BigDecimal.ONE.setScale(6, RoundingMode.HALF_UP);
-			usd = amount.setScale(2, RoundingMode.HALF_UP);
+		    fxForThisDisb = BigDecimal.ONE.setScale(6, RoundingMode.HALF_UP);
+		    usd = amount.setScale(2, RoundingMode.HALF_UP);
 		} else {
-			if (conversionRate == null || conversionRate.signum() <= 0) {
-				throw new IllegalArgumentException(
-						"Conversion rate is required and must be positive for non-USD consumptions");
-			}
-			fxForThisDisb = conversionRate.setScale(6, RoundingMode.HALF_UP);
-			usd = amount.divide(fxForThisDisb, 6, RoundingMode.HALF_UP).setScale(2, RoundingMode.HALF_UP);
-		}
+		    if (conversionRate == null || conversionRate.signum() <= 0) {
+		        throw new IllegalArgumentException(
+		            "Conversion rate is required and must be positive for non-USD consumptions");
+		    }
 
+		    // NEW: validate conversionRate won't overflow DB numeric(18,6)
+		    assertFitsNumeric18_6(conversionRate, "Conversion rate");
+
+		    fxForThisDisb = conversionRate.setScale(6, RoundingMode.HALF_UP);
+
+		    // Your formula: USD = amount / rate
+		    usd = amount.divide(fxForThisDisb, 6, RoundingMode.HALF_UP).setScale(2, RoundingMode.HALF_UP);
+
+		    // NEW: If your amountUsd column is numeric(18,6) or similar, validate too.
+		    // If your amountUsd is numeric(18,2) then change validation accordingly.
+		    assertFitsNumeric18_6(usd, "Converted USD amount");
+		}
 		BigDecimal already = disbRepo.sumUsdByExpense(expenseId);
 		if (already == null)
 			already = BigDecimal.ZERO;
@@ -318,24 +327,35 @@ public class AdditionalExpenseService {
 		d.setCurrency(currency);
 		d.setAmountUsd(usd);
 		d.setDisbursedOn(Instant.now());
-		d.setNote(note);
+		d.setNote(comments);
 		d.setConversionRate(fxForThisDisb);
-
+		d.setDisbursedOn(consumedOn.atStartOfDay(ZoneId.of("Africa/Nairobi")).toInstant());
 		var saved = disbRepo.save(d);
 
 		audit(expenseId, actor != null ? actor.getId() : null, "CONSUMED",
-				"Amount " + amount + " " + currency + " (~" + usd + " USD)");
+				"Amount " + amount + " " + currency + " (~" + usd + " USD)", comments);
 
 		appAuditService.logEvent("ADDITIONAL_EXPENSE", expenseId, exp.getOrder().getSalesOrderId(), "CONSUMED",
-				"Disbursed " + amount + " " + currency + " (~" + usd + " USD) for additional expense " + expenseId
-						+ " on order " + exp.getOrder().getSalesOrderId(),
-				null, actor, actorIp);
+				"Consumed " + amount + " " + currency + " (~" + usd + " USD) for additional expense " + exp.getLabel().getName()
+						,
+				null, actor);
 
 		return saved;
 	}
 
+	private static final BigDecimal MAX_NUMERIC_18_6 = new BigDecimal("999999999999.999999"); // 12 digits + 6 decimals
+
+	private static void assertFitsNumeric18_6(BigDecimal v, String fieldName) {
+	    if (v == null) return;
+	    // after rounding to scale 6, the absolute value must be < 10^12
+	    BigDecimal scaled = v.setScale(6, RoundingMode.HALF_UP).abs();
+	    if (scaled.compareTo(MAX_NUMERIC_18_6) > 0) {
+	        throw new IllegalArgumentException(fieldName + " is too large. Please check the value.");
+	    }
+	}
+	
 	@Transactional
-	public void deleteDisbursement(Long orderId, Long expenseId, Long disbId, AppUser actor, String actorIp) {
+	public void deleteDisbursement(Long orderId, Long expenseId, Long disbId, AppUser actor) {
 		log.warn("deleteDisbursement: orderId={}, expenseId={}, disbId={}, actor={}",
 				orderId, expenseId, disbId, actor != null ? actor.getUsername() : "SYSTEM");
 
@@ -345,181 +365,85 @@ public class AdditionalExpenseService {
 		if (!ex.getOrder().getId().equals(orderId)) {
 			throw new IllegalArgumentException("Expense does not belong to this order");
 		}
+		
+		var disb = disbRepo.findById(disbId)
+				.orElseThrow(() -> new IllegalArgumentException("Disbursement not found"));
+
+		// 2. Extract the amounts (Adjust the getter methods to match your entity)
+		var amount = disb.getAmount(); 
+		var amountUsd = disb.getAmountUsd(); 
+
+		// 3. Format the new audit note
+		String auditNote = String.format("Deleted consumption of %s (%s USD)", amount, amountUsd);
 
 		disbRepo.deleteByIdAndExpenseId(disbId, expenseId);
 
-		audit(expenseId, actor != null ? actor.getId() : null, "CONSUMPTION_DELETED", "ID " + disbId);
+		audit(expenseId, actor != null ? actor.getId() : null, "CONSUMPTION_DELETED", auditNote, null);
 
 		appAuditService.logEvent(
 				"ADDITIONAL_EXPENSE",
 				expenseId,
 				ex.getOrder().getSalesOrderId(),
 				"CONSUMPTION_DELETED",
-				"Deleted consumption " + disbId + " for additional expense " + expenseId
+				auditNote  + " for " +  ex.getLabel().getName()
 						+ " on order " + ex.getOrder().getSalesOrderId(),
 				null,
-				actor,
-				actorIp
+				actor
 		);
 
 	}
 
-	/* ========================= UPDATE ========================= */
-
+	
 	@Transactional
-	public void update(Long orderId, Long expId, AppUser actor, Long labelId, BigDecimal amount, CurrencyCode currency,
-			BigDecimal rate, Long verticalId, String comments, String actorIp, MultipartFile file) {
+	public void delete(Long orderId, Long expId, AppUser actor, boolean deleteFile, 
+	        HttpServletRequest request) throws IOException {
 
-		log.info("update expense: orderId={}, expId={}, actor={}", orderId, expId,
-				actor != null ? actor.getUsername() : "SYSTEM");
+	    log.warn("Executing definitive bulk-query deletion for additional expense ID: {}", expId);
 
-		var ex = repo.findById(expId).orElseThrow();
-		assertOrder(ex, orderId);
+	    // 1. Fetch the entity once to run security and validation rules
+	    var ex = repo.findById(expId).orElseThrow(() -> new IllegalArgumentException("Expense not found"));
+	    if (!ex.getOrder().getId().equals(orderId)) {
+	        throw new IllegalArgumentException("Expense does not belong to this order.");
+	    }
 
-		if (verticalId == null)
-			throw new IllegalArgumentException("Vertical is required");
+	    if (ex.getApprovalStatus() == AdditionalExpenseStatus.CFO_APPROVED && !request.isUserInRole("ROLE_ADMIN")) {
+	        throw new IllegalStateException("Only System Administrators can delete CFO-approved expenses.");
+	    }
 
-		if (!marginReports.existsByOrderIdAndVerticalId(orderId, verticalId)) {
-			throw new IllegalStateException(
-					"Cannot update additional expense to this vertical until a Margin Report is uploaded for the same vertical.");
-		}
+	    String storage = ex.getStorageKey();
+	    String salesOrderId = ex.getOrder().getSalesOrderId();
+	    BigDecimal amount = ex.getAmount();
+	    CurrencyCode currency = ex.getCurrency();
 
-		if (ex.getApprovalStatus() == AdditionalExpenseStatus.CFO_APPROVED) {
-			throw new IllegalStateException("Cannot edit after CFO approval");
-		}
+	    // 🎯 STEP A: Log the global action audit row first while it's safe
+	    appAuditService.logEvent("ADDITIONAL_EXPENSE", expId, salesOrderId, "DELETE",
+	            "Deleted additional expense: " + ex.getLabel().getName() + " (" + amount + " " + currency + ")",
+	            null, actor);
 
-		if (amount == null || amount.signum() <= 0)
-			throw new IllegalArgumentException("Amount must be positive");
-		if (comments == null || comments.isBlank())
-			throw new IllegalArgumentException("Comments are required");
+	    // 🎯 STEP B: Insert the specialized tracking history log row
+	    audit(expId, actor != null ? actor.getId() : null, "DELETED", "Expense permanently removed.", null);
 
-		// capture old values first (for correct needsReset logic)
-		Long oldLabelId = ex.getLabel() != null ? ex.getLabel().getId() : null;
-		BigDecimal oldAmount = ex.getAmount();
-		CurrencyCode oldCurrency = ex.getCurrency();
-		BigDecimal oldRate = ex.getConversionRate();
-		Long oldVerticalId = ex.getVertical() != null ? ex.getVertical().getId() : null;
+	    // 🎯 STEP C: Force Hibernate to write the audit insert to PostgreSQL right now
+	    repo.flush(); 
 
-		boolean needsReset = (oldLabelId != null && !oldLabelId.equals(labelId))
-				|| (oldAmount != null && oldAmount.compareTo(amount.setScale(2, RoundingMode.HALF_UP)) != 0)
-				|| (oldCurrency != currency) || (oldVerticalId != null && !oldVerticalId.equals(verticalId))
-				|| (currency != CurrencyCode.USD && rate != null && oldRate != null
-						&& oldRate.compareTo(rate.setScale(6, RoundingMode.HALF_UP)) != 0);
+	    // 🎯 STEP D: THE DEFINITIVE FIX - Execute a direct Bulk Deletion Query
+	    // This tells the database to drop row 'expId' directly.
+	    // PostgreSQL immediately intercepts this and handles its own ON DELETE CASCADE,
+	    // bypassing Hibernate's memory graph tracking completely!
+	    repo.deleteExpenseByIdQuery(expId);
 
-		ex.setLabel(labels.findById(labelId).orElseThrow());
-		ex.setAmount(amount.setScale(2, RoundingMode.HALF_UP));
-		ex.setCurrency(currency);
-
-		if (currency == CurrencyCode.USD) {
-			BigDecimal fx = BigDecimal.ONE.setScale(6, RoundingMode.HALF_UP);
-			ex.setConversionRate(fx);
-			ex.setAmountUsd(amount.setScale(2, RoundingMode.HALF_UP));
-		} else {
-			if (rate == null || rate.signum() <= 0) {
-				throw new IllegalArgumentException(
-						"Conversion rate is required and must be positive for non-USD expenses");
-			}
-
-			BigDecimal fx = rate.setScale(6, RoundingMode.HALF_UP);
-			ex.setConversionRate(fx);
-
-			BigDecimal usd = amount.divide(fx, 6, RoundingMode.HALF_UP).setScale(2, RoundingMode.HALF_UP);
-			ex.setAmountUsd(usd);
-		}
-
-		ex.setVertical(verticals.findById(verticalId).orElseThrow());
-		ex.setComments(comments.trim());
-
-		if (needsReset) {
-			log.debug("update expense causes approval reset: expId={}", expId);
-			ex.setApprovalStatus(AdditionalExpenseStatus.WAITING);
-			ex.setCeoApprovedBy(null);
-			ex.setCeoApprovedOn(null);
-			ex.setCfoApprovedBy(null);
-			ex.setCfoApprovedOn(null);
-			ex.setRejectedBy(null);
-			ex.setRejectedOn(null);
-			ex.setRejectionReason(null);
-		}
-
-		if (file != null && !file.isEmpty()) {
-			String orig = file.getOriginalFilename();
-			String safe = sanitize(orig);
-			String serverName = (safe != null) ? (orderId + "_" + Instant.now().toEpochMilli() + "_" + safe) : null;
-
-			var dest = root.resolve(serverName).normalize();
-			if (!dest.startsWith(root))
-				throw new SecurityException("Invalid file path");
-
-			try {
-				Files.copy(file.getInputStream(), dest, StandardCopyOption.REPLACE_EXISTING);
-			} catch (IOException e) {
-				throw new RuntimeException("Failed to store file", e);
-			}
-
-			ex.setFileName(orig);
-			ex.setStorageKey(serverName);
-		}
-
-		repo.saveAndFlush(ex);
-
-		audit(expId, actor != null ? actor.getId() : null, "UPDATED", "Expense updated");
-
-		appAuditService.logEvent("ADDITIONAL_EXPENSE", expId, ex.getOrder().getSalesOrderId(), "UPDATE",
-				"Updated additional expense " + expId + " on order " + ex.getOrder().getSalesOrderId(), null, actor,
-				actorIp);
-
-		// NOTIFICATION: only if reset happened (meaning others must re-approve)
-		if (needsReset) {
-			notificationService.notifyRole(AppRole.CEO, NotificationType.EXPENSE_UPDATED,
-					"Expense updated (re-approval needed)",
-					"Order " + ex.getOrder().getSalesOrderId() + " expense updated and needs re-approval",
-					"ADDITIONAL_EXPENSE", expId, "/orders/" + orderId + "?tab=margin");
-		}
+	    // 2. Clear static attachment files from your storage path safely
+	    if (deleteFile && storage != null) {
+	        try {
+	            Path filePath = root.resolve(storage).normalize();
+	            if (filePath.startsWith(root)) {
+	                Files.deleteIfExists(filePath);
+	            }
+	        } catch (Exception e) {
+	            log.warn("Failed to delete attachment file '{}': {}", storage, e.toString());
+	        }
+	    }
 	}
-
-	/* ========================= DELETE ========================= */
-
-	@Transactional
-	public void delete(Long orderId, Long expId, AppUser actor, boolean deleteFile, String actorIp,
-			HttpServletRequest request) throws IOException {
-
-		log.warn("delete expense: orderId={}, expId={}, actor={}, deleteFile={}", orderId, expId,
-				actor != null ? actor.getUsername() : "SYSTEM", deleteFile);
-
-		var ex = repo.findById(expId).orElseThrow();
-		if (!ex.getOrder().getId().equals(orderId))
-			throw new IllegalArgumentException("Not in this order");
-
-		if (ex.getApprovalStatus() == AdditionalExpenseStatus.CFO_APPROVED && !request.isUserInRole("ROLE_ADMIN")) {
-			throw new IllegalStateException("Only Admin can delete CFO-approved expenses.");
-		}
-
-		appAuditService.logEvent("ADDITIONAL_EXPENSE", expId, ex.getOrder().getSalesOrderId(), "DELETE",
-				"Deleted additional expense " + expId + " (" + ex.getAmount() + " " + ex.getCurrency() + ") on order "
-						+ ex.getOrder().getSalesOrderId(),
-				null, actor, actorIp);
-
-		audit(expId, actor != null ? actor.getId() : null, "DELETED", "Expense deleted");
-
-		String storage = ex.getStorageKey();
-		repo.delete(ex);
-
-		// FIX: delete actual stored file under root, not Paths.get(storage)
-		if (deleteFile && storage != null) {
-			try {
-				Path filePath = root.resolve(storage).normalize();
-				if (!filePath.startsWith(root)) {
-					log.warn("Blocked delete due to invalid path: {}", filePath);
-				} else {
-					Files.deleteIfExists(filePath);
-				}
-			} catch (Exception e) {
-				log.warn("Failed to delete file {}: {}", storage, e.toString());
-			}
-		}
-	}
-
 	/* ========================= INTERNAL HELPERS ========================= */
 
 	private AdditionalExpense mustLoad(Long orderId, Long expenseId) {
@@ -529,12 +453,13 @@ public class AdditionalExpenseService {
 		return e;
 	}
 
-	private void audit(Long expId, Long actorUserId, String action, String note) {
+	private void audit(Long expId, Long actorUserId, String action, String note, String comments) {
 		var a = new AdditionalExpenseAudit();
 		a.setExpense(em.getReference(AdditionalExpense.class, expId));
 		a.setActor(actorUserId != null ? em.getReference(AppUser.class, actorUserId) : null);
 		a.setAction(action);
 		a.setNote(note);
+		a.setComments(comments);
 		a.setActedOn(Instant.now());
 		auditRepo.save(a);
 	}
@@ -549,4 +474,24 @@ public class AdditionalExpenseService {
 		if (!ex.getOrder().getId().equals(orderId))
 			throw new IllegalArgumentException("Expense not in this order");
 	}
+	
+	public Page<OrderAdditionalExpenseSummaryRow> getOrderExpenseSummary(String searchOrder, String searchCustomer, Pageable pageable) {
+		log.debug("Fetching order expense summary report with filters - searchOrder: {}, searchCustomer: {}", searchOrder, searchCustomer);
+		
+		// Handle empty text inputs arriving from the frontend form gracefully by converting to null
+		String orderParam = (searchOrder != null && !searchOrder.isBlank()) ? searchOrder.trim() : null;
+		String customerParam = (searchCustomer != null && !searchCustomer.isBlank()) ? searchCustomer.trim() : null;
+
+		return repo.findOrderExpenseSummary(orderParam, customerParam, pageable);
+	}
+	
+	@Transactional(readOnly = true)
+    public List<String> getDistinctSalesOrderIds() {
+        return repo.findDistinctSalesOrderIds();
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> getDistinctCustomerNames() {
+        return repo.findDistinctCustomerNames();
+    }
 }

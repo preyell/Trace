@@ -42,4 +42,7 @@ public interface MarginReportRepository extends JpaRepository<MarginReport, Long
         where mr.id = :id
     """)
     Optional<MarginReport> findByIdWithOrder(@Param("id") Long id);
+    
+    @Query("SELECT mr FROM MarginReport mr LEFT JOIN FETCH mr.vertical WHERE mr.id = :id")
+    Optional<MarginReport> findByIdWithVertical(@Param("id") Long id);
 }

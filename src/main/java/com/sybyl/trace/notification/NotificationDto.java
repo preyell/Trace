@@ -9,7 +9,7 @@ public class NotificationDto {
     public String title;
     public String message;
     public String targetUrl;
-    public boolean read;
+    public boolean readFlag;
     public Instant createdAt;
 
     public static NotificationDto from(Notification n) {
@@ -18,7 +18,7 @@ public class NotificationDto {
         dto.title     = n.getTitle();
         dto.message   = n.getMessage();
         dto.targetUrl = n.getTargetUrl();
-        dto.read      = n.isReadFlag();
+        dto.readFlag      = n.isReadFlag();
         dto.createdAt = n.getCreatedAt();
         return dto;
     }

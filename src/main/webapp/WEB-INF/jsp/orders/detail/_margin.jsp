@@ -24,13 +24,7 @@
 	</c:if>
 </c:forEach>
 
-<c:if test="${not empty error}">
-	<div class="alert alert-danger">${error}</div>
-</c:if>
 
-<c:if test="${not empty message}">
-	<div class="alert alert-primary">${message}</div>
-</c:if>
 <div class="d-flex align-items-center mb-3">
 
 	<!-- Left side buttons -->
@@ -250,10 +244,9 @@
 										<span class="badge badge-primary">${mr.approvalStatus}</span>
 									</c:otherwise>
 								</c:choose></td>
-
 							<td><c:out value="${mr.uploadedBy.firstName}" /></td>
 							<td><fmt:formatDate value="${mr.uploadedOnDate}"
-									pattern="yyyy-MM-dd HH:mm" timeZone="Africa/Kampala" /></td>
+									pattern="yyyy-MM-dd HH:mm" timeZone="Africa/Nairobi" /></td>
 							<td><a
 								href="${pageContext.request.contextPath}/orders/${order.id}/margin-reports/${mr.id}/download">
 									<i class="fa fa-file mr-1"></i> <c:out value="${mr.fileName}" />
@@ -266,7 +259,9 @@
 											action="${pageContext.request.contextPath}/orders/${order.id}/margin-reports/${mr.id}/approve-finance">
 											<input type="hidden" name="${_csrf.parameterName}"
 												value="${_csrf.token}" />
-											<button class="btn btn-sm btn-outline-primary">
+											<button type="button"
+												class="btn btn-sm btn-outline-primary js-mr-approve-btn"
+												data-mrid="${mr.id}" data-type="finance">
 												<i class="fa fa-check mr-1"></i>Approve (Finance)
 											</button>
 										</form>
@@ -284,7 +279,9 @@
 											action="${pageContext.request.contextPath}/orders/${order.id}/margin-reports/${mr.id}/approve-ceo">
 											<input type="hidden" name="${_csrf.parameterName}"
 												value="${_csrf.token}" />
-											<button class="btn btn-sm btn-outline-primary">
+											<button type="button"
+												class="btn btn-sm btn-outline-primary js-mr-approve-btn"
+												data-mrid="${mr.id}" data-type="ceo">
 												<i class="fa fa-check mr-1"></i>Approve (CEO)
 											</button>
 										</form>
@@ -312,7 +309,7 @@
 											data-scur="${mr.sellingCurrency}"
 											data-fx="${mr.conversionRate}"
 											data-vertical="${mr.vertical.id}"
-											data-comments="${fn:escapeXml(mr.comments)}">
+											>
 											<i class="fa fa-edit mr-1"></i>
 										</button>
 									</c:otherwise>
@@ -437,9 +434,10 @@
 												<span class="badge badge-primary">${mr.approvalStatus}</span>
 											</c:otherwise>
 										</c:choose></td>
+
 									<td><c:out value="${ex.uploadedBy.firstName}" /></td>
 									<td><fmt:formatDate value="${ex.uploadedOnDate}"
-											pattern="yyyy-MM-dd HH:mm" timeZone="Africa/Kampala" /></td>
+											pattern="yyyy-MM-dd HH:mm" timeZone="Africa/Nairobi" /></td>
 									<td><c:if test="${not empty ex.fileName}">
 											<a
 												href="${pageContext.request.contextPath}/orders/${order.id}/expenses/${ex.id}/download">
@@ -456,7 +454,9 @@
 													action="${pageContext.request.contextPath}/orders/${order.id}/expenses/${ex.id}/approve/ceo">
 													<input type="hidden" name="${_csrf.parameterName}"
 														value="${_csrf.token}" />
-													<button class="btn btn-sm btn-outline-primary">
+													<button type="button"
+														class="btn btn-sm btn-outline-primary js-exp-approve-btn"
+														data-expid="${ex.id}" data-type="ceo">
 														<i class="fa fa-check mr-1"></i>Approve (CEO)
 													</button>
 												</form>
@@ -474,8 +474,11 @@
 													action="${pageContext.request.contextPath}/orders/${order.id}/expenses/${ex.id}/approve/cfo">
 													<input type="hidden" name="${_csrf.parameterName}"
 														value="${_csrf.token}" />
-													<button class="btn btn-sm btn-outline-primary">
-														CFO Approve</button>
+													<button type="button"
+														class="btn btn-sm btn-outline-primary js-exp-approve-btn"
+														data-expid="${ex.id}" data-type="cfo">
+														<i class="fa fa-check mr-1"></i>Approve (CFO)
+													</button>
 												</form>
 												<button type="button" class="btn btn-sm btn-outline-danger"
 													data-toggle="modal" data-target="#expenseRejectModal"
@@ -486,37 +489,40 @@
 										</sec:authorize> <sec:authorize
 											access="hasAnyAuthority('ROLE_ADMIN','ROLE_CEO','ROLE_CFO')">
 
-											<c:set var="canConsume"
+											<c:set var="isApproved"
 												value="${ex.approvalStatus == 'CFO_APPROVED'}" />
 
+											<c:set var="isDI"
+												value="${fn:containsIgnoreCase(ex.label.name, 'design') && fn:containsIgnoreCase(ex.label.name, 'implementation')}" />
+
+											<c:set var="canConsume" value="${isApproved && isDI}" />
+
+											<c:choose>
+												<c:when test="${!isDI}">
+													<c:set var="tooltipMsg"
+														value="Consumption tracking is only available for Design & Implementation Services" />
+												</c:when>
+												<c:when test="${!isApproved}">
+													<c:set var="tooltipMsg"
+														value="Expense must be CFO approved before it can be consumed" />
+												</c:when>
+												<c:otherwise>
+													<c:set var="tooltipMsg" value="Consume expense" />
+												</c:otherwise>
+											</c:choose>
+
 											<button type="button"
-												class="btn btn-sm btn-outline-primary js-exp-consume
-                 ${canConsume ? '' : 'disabled'}"
+												class="btn btn-sm btn-outline-primary js-exp-consume ${canConsume ? '' : 'disabled'}"
 												data-toggle="modal"
 												data-target="${canConsume ? '#expDisburseModal' : ''}"
 												data-expid="${ex.id}" data-exp-amount="${ex.amount}"
 												data-exp-currency="${ex.currency}"
 												data-exp-status="${ex.approvalStatus}"
 												data-exp-usd="${ex.amountUsd}"
-												${canConsume ? '' : 'disabled'}
-												title="${canConsume
-                    ? 'Consume expense'
-                    : 'Expense must be CFO approved before it can be consumed'}">
+												${canConsume ? '' : 'disabled'} title="${tooltipMsg}">
 												Consume</button>
 
-										</sec:authorize> <sec:authorize
-											access="hasAnyAuthority('ROLE_ADMIN','ROLE_CFO','ROLE_CEO')">
-											<button type="button" class="btn btn-sm btn-outline-primary"
-												data-toggle="modal" data-target="#expEditModal"
-												data-expid="${ex.id}" data-labelid="${ex.label.id}"
-												data-amount="${ex.amount}" data-currency="${ex.currency}"
-												data-rate="${ex.conversionRate}"
-												data-verticalid="${ex.vertical.id}"
-												data-comments="${fn:escapeXml(ex.comments)}"
-												${ex.approvalStatus == 'CFO_APPROVED' ? 'disabled' : ''}>
-												<i class="fa fa-edit mr-1"></i>
-											</button>
-										</sec:authorize> <sec:authorize access="hasAuthority('ROLE_ADMIN')">
+										</sec:authorize>  <sec:authorize access="hasAuthority('ROLE_ADMIN')">
 											<button type="button" class="btn btn-sm btn-outline-danger"
 												data-toggle="modal" data-target="#expDeleteModal"
 												data-expid="${ex.id}"
@@ -602,7 +608,7 @@
 						</div>
 						<div class="col-sm-12 mb-2">
 							<label>Comments</label>
-							<textarea class="form-control" name="comments" rows="2"></textarea>
+							<textarea class="form-control" name="comments" rows="2" required></textarea>
 						</div>
 					</div>
 
@@ -643,7 +649,7 @@
 	<div class="modal-dialog modal-lg modal-dialog-scrollable">
 		<div class="modal-content">
 			<div class="modal-header">
-				<h5 class="modal-title">Audit trail</h5>
+				<h5 class="modal-title">Margin Report Audits</h5>
 				<button type="button" class="close" data-dismiss="modal"
 					aria-label="Close">
 					<span aria-hidden="true">&times;</span>
@@ -670,7 +676,7 @@
 						value="${_csrf.token}" />
 					<div class="form-group">
 						<label>Reason</label>
-						<textarea class="form-control" name="reason" rows="3" required></textarea>
+						<textarea class="form-control" name="comments" rows="3" required></textarea>
 					</div>
 				</div>
 				<div class="modal-footer">
@@ -779,7 +785,7 @@
 	<div class="modal-dialog modal-lg modal-dialog-scrollable">
 		<div class="modal-content">
 			<div class="modal-header">
-				<h5 class="modal-title">Expense Audit</h5>
+				<h5 class="modal-title">Expense Audits</h5>
 				<button type="button" class="close" data-dismiss="modal">&times;</button>
 			</div>
 			<div class="modal-body" id="expAuditBody">Loading...</div>
@@ -793,10 +799,12 @@
 	role="dialog" aria-hidden="true">
 	<div class="modal-dialog modal-lg modal-dialog-scrollable">
 		<div class="modal-content">
+
 			<!-- Action gets set dynamically; __EXPID__ is a placeholder -->
 			<form method="post"
-				action="<c:url value='/orders/${order.id}/expenses/__EXPID__/consume'/>"
+				action="<c:url value='/orders/${order.id}/expenses/0/consume'/>"
 				id="disburseForm">
+
 				<div class="modal-header">
 					<h5 class="modal-title">Consume Additional Expense</h5>
 					<button type="button" class="close" data-dismiss="modal"
@@ -807,10 +815,12 @@
 
 				<div class="modal-body">
 
+					<!-- Error alert (shown when expenseError exists) -->
 					<div id="expConsumeErrorAlert"
-						class="alert alert-danger py-1 small mb-2 d-none">
+						class="alert alert-danger py-1 small mb-2 ${empty expenseError ? 'd-none' : ''}">
 						<i class="fa fa-exclamation-circle mr-1"></i> <span
-							id="expConsumeErrorText"></span>
+							id="expConsumeErrorText"> <c:out value="${expenseError}" />
+						</span>
 					</div>
 
 					<!-- Inline expense meta -->
@@ -826,26 +836,33 @@
 					<div class="form-row">
 						<div class="form-group col-md-4">
 							<label>Amount to Consume</label> <input type="number" step="0.01"
-								min="0.01" class="form-control" name="amount" required>
+								min="0.01" class="form-control" name="amount" required
+								value="${consumeAmount}">
 						</div>
 
 						<div class="form-group col-md-4">
 							<label>Consumption Currency</label> <select name="currency"
 								class="form-control ae-disburse-currency">
 								<c:forEach var="c" items="${currencies}">
-									<option value="${c}">${c}</option>
+									<option value="${c}" ${c == consumeCurrency ? 'selected' : ''}>${c}</option>
 								</c:forEach>
 							</select>
 						</div>
 
 						<div class="form-group col-md-4">
 							<label>Conversion Rate</label> <input type="text"
-								name="conversionRate" class="form-control ae-disburse-rate">
+								name="conversionRate" class="form-control ae-disburse-rate"
+								value="${consumeConversionRate}"> <small
+								class="text-muted">Required if currency is not USD</small>
 						</div>
-
+						<div class="form-group col-md-4">
+							<label>Consumed On Date</label> <input type="date"
+								class="form-control" name="consumedOn" required>
+						</div>
 						<div class="form-group col-md-12">
 							<label>Comments</label>
-							<textarea class="form-control" name="note" rows="2" required></textarea>
+							<textarea class="form-control" name="comments" rows="2" required><c:out
+									value="${consumeNote}" /></textarea>
 						</div>
 					</div>
 
@@ -858,7 +875,7 @@
 					</div>
 
 				</div>
-
+				<input type="hidden" name="expenseId" id="consumeExpenseId" value="" />
 				<div class="modal-footer">
 					<input type="hidden" name="${_csrf.parameterName}"
 						value="${_csrf.token}" id="csrfTokenField" />
@@ -866,6 +883,7 @@
 					<button type="button" class="btn btn-secondary"
 						data-dismiss="modal">Close</button>
 				</div>
+
 			</form>
 		</div>
 	</div>
@@ -878,88 +896,7 @@
 
 
 
-<!-- Edit Additional Expense Modal -->
-<div class="modal fade" id="expEditModal" tabindex="-1"
-	aria-hidden="true">
-	<div class="modal-dialog modal-lg modal-dialog-scrollable">
-		<form id="expEditForm" method="post" enctype="multipart/form-data">
-			<input type="hidden" name="${_csrf.parameterName}"
-				value="${_csrf.token}" />
-			<div class="modal-content">
-				<div class="modal-header">
-					<h5 class="modal-title">Edit Additional Expense</h5>
-					<button type="button" class="close" data-dismiss="modal">&times;</button>
-				</div>
 
-				<div class="modal-body">
-					<div class="form-row">
-						<div class="form-group col-md-6">
-							<label>Description (Label)</label> <select class="form-control"
-								name="labelId" id="expEditLabel">
-								<c:forEach var="l" items="${expenseLabels}">
-									<option value="${l.id}" ${!l.active ? 'disabled':''}>
-										<c:out value="${l.name}" />
-										<c:if test="${!l.active}"> (inactive)</c:if>
-									</option>
-								</c:forEach>
-							</select>
-						</div>
-
-						<div class="form-group col-md-3">
-							<label>Amount</label> <input type="number" step="0.01" min="0"
-								class="form-control" name="amount" id="expEditAmount" required>
-						</div>
-
-						<div class="form-group col-md-3">
-							<label>Currency</label> <select name="currency"
-								id="expEditCurrency" class="form-control ae-currency" required>
-								<c:forEach var="cur" items="${currencies}">
-									<option value="${cur}">${cur}</option>
-								</c:forEach>
-							</select>
-						</div>
-
-						<div class="form-group col-md-4">
-							<label>Conversion Rate</label> <input type="number"
-								name="conversionRate" id="expEditRate"
-								class="form-control ae-conversion-rate" step="0.01" min="0.00"
-								required>
-						</div>
-
-						<div class="form-group col-md-4">
-							<label>Vertical</label> <select class="form-control"
-								name="verticalId" id="expEditVertical" required>
-								<c:forEach var="v" items="${expenseVerticals}">
-									<option value="${v.id}"><c:out value="${v.name}" /></option>
-								</c:forEach>
-							</select>
-						</div>
-
-						<div class="form-group col-md-12">
-							<label>Comments <span class="text-danger">*</span></label>
-							<textarea class="form-control" name="comments"
-								id="expEditComments" rows="2" required></textarea>
-						</div>
-
-
-						<div class="form-group">
-							<label>Replace Attachment (optional)</label> <input type="file"
-								name="file" class="form-control-file"> <small
-								class="form-text text-muted"> Leave empty to keep the
-								existing file. </small>
-						</div>
-					</div>
-
-					<div class="modal-footer">
-						<button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
-						<button type="submit" class="btn btn-primary">Save
-							changes</button>
-					</div>
-				</div>
-			</div>
-		</form>
-	</div>
-</div>
 
 <!-- Delete Expense Modal -->
 <div class="modal fade" id="expDeleteModal" tabindex="-1"
@@ -982,8 +919,6 @@
 						<label class="custom-control-label" for="expDeleteFile">Also
 							delete the uploaded file</label>
 					</div>
-					<small class="text-muted d-block mt-2">Non-admin users can
-						only delete items that are not CFO-approved.</small>
 				</div>
 				<div class="modal-footer">
 					<button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
@@ -1009,7 +944,7 @@
 
 				<div class="modal-body">
 					<label>Reason for rejection</label>
-					<textarea name="reason" class="form-control" required></textarea>
+					<textarea name="comments" class="form-control" required></textarea>
 
 					<input type="hidden" name="${_csrf.parameterName}"
 						value="${_csrf.token}">
@@ -1027,6 +962,62 @@
 	</div>
 </div>
 
+<div class="modal fade" id="mrApproveModal" tabindex="-1" role="dialog"
+	aria-hidden="true">
+	<div class="modal-dialog" role="document">
+		<form method="post" id="mrApproveForm">
+			<input type="hidden" name="${_csrf.parameterName}"
+				value="${_csrf.token}" />
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title" id="mrApproveTitle">Approve Margin
+						Report</h5>
+					<button type="button" class="close" data-dismiss="modal">&times;</button>
+				</div>
+				<div class="modal-body">
+					<div class="form-group">
+						<label>Approval Comments <span class="text-danger">*</span></label>
+						<textarea class="form-control" name="comments" rows="3" required></textarea>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button class="btn btn-secondary" type="button"
+						data-dismiss="modal">Cancel</button>
+					<button class="btn btn-success" type="submit">Confirm
+						Approval</button>
+				</div>
+			</div>
+		</form>
+	</div>
+</div>
+
+<div class="modal fade" id="expApproveModal" tabindex="-1" role="dialog"
+	aria-hidden="true">
+	<div class="modal-dialog" role="document">
+		<form method="post" id="expApproveForm">
+			<input type="hidden" name="${_csrf.parameterName}"
+				value="${_csrf.token}" />
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title" id="expApproveTitle">Approve Expense</h5>
+					<button type="button" class="close" data-dismiss="modal">&times;</button>
+				</div>
+				<div class="modal-body">
+					<div class="form-group">
+						<label>Approval Comments <span class="text-danger">*</span></label>
+						<textarea class="form-control" name="comments" rows="3" required></textarea>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button class="btn btn-secondary" type="button"
+						data-dismiss="modal">Cancel</button>
+					<button class="btn btn-success" type="submit">Confirm
+						Approval</button>
+				</div>
+			</div>
+		</form>
+	</div>
+</div>
 <!-- Delete Margin Report Modal -->
 <div class="modal fade" id="mrDeleteModal" tabindex="-1"
 	aria-hidden="true">

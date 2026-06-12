@@ -28,6 +28,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.sybyl.trace.audit.AppAuditService;
+import com.sybyl.trace.exception.BusinessException;
 import com.sybyl.trace.location.Location;
 import com.sybyl.trace.masterdata.AdditionalExpenseLabelService;
 import com.sybyl.trace.masterdata.CustomerRepository;
@@ -83,25 +84,32 @@ public class OrderController {
 		this.auditService = auditService;
 	}
 
-	// LIST
 	@GetMapping("/orders")
-	public String list(@RequestParam(value = "q", required = false) String q, @AuthenticationPrincipal MyUserDetails me,
+	public String list(
+			@RequestParam(value = "q", required = false) String q, 
+			@AuthenticationPrincipal MyUserDetails me,
 			@RequestParam(name = "loc", required = false) Location loc,
+			@RequestParam(name = "advCustomer", required = false) Long advCustomer,
+			@RequestParam(name = "advManager", required = false) Long advManager,
+			@RequestParam(name = "advVertical", required = false) Long advVertical,
+			@RequestParam(name = "advDesc", required = false) String advDesc,
+			@RequestParam(name = "advStartDate", required = false) String advStartDate,
+			@RequestParam(name = "advEndDate", required = false) String advEndDate,
 			@RequestParam(name = "page", defaultValue = "0") int page,
 			@RequestParam(name = "size", defaultValue = "10") int size, Model model) {
-
-		log.info("Orders list requested by userId={}, q='{}', loc={}, page={}, size={}",
-				(me != null ? me.getUsername() : null), q, loc, page, size);
 
 		Set<Location> allowed = me.getLocations();
 		Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-		Page<Order> result = orderService.listForUser(me.getUser(), loc, q, pageable);
+		// Load custom list incorporating structural variables
+		Page<Order> result = orderService.listForUserAdvanced(me.getUser(), loc, q, 
+				advCustomer, advManager, advVertical, advDesc, advStartDate, advEndDate, pageable);
 
-		log.debug("Orders list result: totalElements={}, totalPages={}, numberOfElements={}", result.getTotalElements(),
-				result.getTotalPages(), result.getNumberOfElements());
+		// Provide full reference lookups for dropdown inputs mapping
+		model.addAttribute("customersLookup", customers.findAll());
+		model.addAttribute("managersLookup", users.findAllSalesManagers());
+		model.addAttribute("verticalsLookup", verticals.findAll());
 
-		model.addAttribute("pageTitle", "Orders");
 		model.addAttribute("page", result);
 		model.addAttribute("allowedLocations", allowed);
 		model.addAttribute("selectedLoc", loc);
@@ -112,24 +120,28 @@ public class OrderController {
 
 	@GetMapping("/orders/fragment")
 	@PreAuthorize("isAuthenticated()")
-	public String listFragment(@AuthenticationPrincipal MyUserDetails me,
+	public String listFragment(
+			@AuthenticationPrincipal MyUserDetails me,
 			@RequestParam(name = "loc", required = false) Location loc,
 			@RequestParam(name = "q", required = false) String q,
+			@RequestParam(name = "advCustomer", required = false) Long advCustomer,
+			@RequestParam(name = "advManager", required = false) Long advManager,
+			@RequestParam(name = "advVertical", required = false) Long advVertical,
+			@RequestParam(name = "advDesc", required = false) String advDesc,
+			@RequestParam(name = "advStartDate", required = false) String advStartDate,
+			@RequestParam(name = "advEndDate", required = false) String advEndDate,
 			@RequestParam(name = "page", defaultValue = "0") int page,
 			@RequestParam(name = "size", defaultValue = "10") int size, Model model) {
 
-		log.debug("Orders fragment requested by userId={}, q='{}', loc={}, page={}, size={}",
-				(me != null ? me.getUsername() : null), q, loc, page, size);
-
 		Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-		Page<Order> result = orderService.listForUser(me.getUser(), loc, q, pageable);
+		Page<Order> result = orderService.listForUserAdvanced(me.getUser(), loc, q, 
+				advCustomer, advManager, advVertical, advDesc, advStartDate, advEndDate, pageable);
 
 		model.addAttribute("page", result);
 		model.addAttribute("selectedLoc", loc);
 		model.addAttribute("q", q == null ? "" : q);
 		return "orders/_listContent";
 	}
-
 	// CREATE (form)
 	@GetMapping("/orders/new")
 	public String createForm(@AuthenticationPrincipal MyUserDetails me, Model model) {
@@ -142,45 +154,78 @@ public class OrderController {
 	}
 
 	@PostMapping("/orders")
-	public String create(@AuthenticationPrincipal MyUserDetails me, @Valid @ModelAttribute("form") OrderForm form,
-			BindingResult errors, Model model, RedirectAttributes redirectAttrs, HttpServletRequest request) {
+	public String create(@AuthenticationPrincipal MyUserDetails me,
+	                     @Valid @ModelAttribute("form") OrderForm form,
+	                     BindingResult errors,
+	                     Model model,
+	                     RedirectAttributes redirectAttrs,
+	                     HttpServletRequest request) {
 
-		log.info("Create order requested by userId={}, salesOrderId={}", (me != null ? me.getUsername() : null),
-				form.getSalesOrderId());
+	    log.info("Create order requested by userId={}, salesOrderId={}",
+	            (me != null ? me.getUsername() : null), form.getSalesOrderId());
 
-		if (errors.hasErrors()) {
-			log.warn("Create order validation failed: {}", errors.getAllErrors());
-			model.addAttribute("pageTitle", "Create Order");
-			supplyFormLookups(model, me);
-			model.addAttribute("contentJsp", "orders/orderform.jsp");
-			return "layout";
-		}
+	    if (errors.hasErrors()) {
+	        log.warn("Create order validation failed: {}", errors.getAllErrors());
+	        model.addAttribute("pageTitle", "Create Order");
+	        supplyFormLookups(model, me);
+	        model.addAttribute("contentJsp", "orders/orderform.jsp");
+	        return "layout";
+	    }
 
-		try {
-			Order created = orderService.create(me.getUser(), form);
-			log.info("Order created: id={}, salesOrderId={}", created.getId(), created.getSalesOrderId());
+	    try {
+	        Order created = orderService.create(me.getUser(), form);
+	        log.info("Order created: id={}, salesOrderId={}", created.getId(), created.getSalesOrderId());
 
-			String actorIp = IpUtils.getClientIp(request);
+	        auditService.logEvent("ORDER", created.getId(), created.getSalesOrderId(), "CREATE",
+	                "Created order " + created.getSalesOrderId(),
+	                null, me != null ? me.getUser() : null);
 
-			auditService.logEvent("ORDER", created.getId(), created.getSalesOrderId(), "CREATE",
-					"Created order " + created.getSalesOrderId(), null, me != null ? me.getUser() : null, actorIp);
+	        redirectAttrs.addFlashAttribute("message", "Order created successfully.");
+	        return "redirect:/orders";
 
-		} catch (AccessDeniedException ex) {
-			log.warn("Create order forbidden for userId={}, location={}", me.getUsername(), form.getLocation());
-			errors.rejectValue("location", "order.location.forbidden",
-					"You are not allowed to create orders for this location.");
-			model.addAttribute("pageTitle", "Create Order");
-			supplyFormLookups(model, me);
-			model.addAttribute("contentJsp", "orders/orderform.jsp");
-			return "layout";
-		} catch (Exception ex) {
-			log.error("Create order failed for userId={}, salesOrderId={}", me.getUsername(), form.getSalesOrderId(),
-					ex);
-			throw ex;
-		}
+	    } catch (AccessDeniedException ex) {
+	        log.warn("Create order forbidden for userId={}, location={}",
+	                me != null ? me.getUsername() : null, form.getLocation());
 
-		redirectAttrs.addFlashAttribute("message", "Order created successfully.");
-		return "redirect:/orders";
+	        errors.rejectValue("location", "order.location.forbidden",
+	                "You are not allowed to create orders for this location.");
+
+	    } catch (IllegalArgumentException ex) {
+	        log.warn("Create order business validation failed for userId={}, salesOrderId={}, msg={}",
+	                me != null ? me.getUsername() : null, form.getSalesOrderId(), ex.getMessage());
+
+	        String msg = ex.getMessage() != null ? ex.getMessage() : "Invalid input.";
+
+	        // map duplicate SO ID to field error
+	        if (msg.toLowerCase().contains("sales order id already exists")) {
+	            errors.rejectValue("salesOrderId", "order.salesOrderId.duplicate", msg);
+	        } else if (msg.toLowerCase().contains("customerid")) {
+	            errors.rejectValue("customerId", "order.customer.invalid", msg);
+	        } else if (msg.toLowerCase().contains("salesmanagerid")) {
+	            errors.rejectValue("salesManagerId", "order.salesManager.invalid", msg);
+	        } else {
+	            errors.reject("order.create.failed", msg);
+	        }
+
+	    } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+	        // safety net for race conditions / DB unique constraint
+	        log.warn("Create order DB constraint violation for salesOrderId={}", form.getSalesOrderId(), ex);
+
+	        errors.rejectValue("salesOrderId", "order.salesOrderId.duplicate",
+	                "Sales Order ID already exists: " + form.getSalesOrderId());
+
+	    } catch (Exception ex) {
+	        log.error("Create order failed for userId={}, salesOrderId={}",
+	                me != null ? me.getUsername() : null, form.getSalesOrderId(), ex);
+
+	        errors.reject("order.create.failed", "Failed to create order. Please try again.");
+	    }
+
+	    // return form with errors
+	    model.addAttribute("pageTitle", "Create Order");
+	    supplyFormLookups(model, me);
+	    model.addAttribute("contentJsp", "orders/orderform.jsp");
+	    return "layout";
 	}
 
 	@PostMapping("/orders/{id}")
@@ -205,10 +250,9 @@ public class OrderController {
 
 			Order updated = orderService.getForDetails(id);
 
-			String actorIp = IpUtils.getClientIp(request);
 
 			auditService.logEvent("ORDER", updated.getId(), updated.getSalesOrderId(), "UPDATE",
-					"Updated order " + updated.getSalesOrderId(), null, me != null ? me.getUser() : null, actorIp);
+					"Updated order " + updated.getSalesOrderId(), null, me != null ? me.getUser() : null);
 
 		} catch (AccessDeniedException ex) {
 			log.warn("Update order forbidden: userId={}, id={}, newLocation={}", me.getUsername(), id,
@@ -229,38 +273,47 @@ public class OrderController {
 	}
 
 	@PostMapping("/orders/{id}/delete")
-	public String delete(@AuthenticationPrincipal MyUserDetails me, @PathVariable Long id,
-			RedirectAttributes redirectAttrs, HttpServletRequest request) {
+	public String delete(@AuthenticationPrincipal MyUserDetails me,
+	                     @PathVariable Long id,
+	                     RedirectAttributes redirectAttrs,
+	                     HttpServletRequest request) {
 
-		log.warn("Delete order requested: id={}, userId={}", id, (me != null ? me.getUsername() : null));
+	    log.warn("Delete order requested: id={}, userId={}", id, (me != null ? me.getUsername() : null));
 
-		Order order = null;
-		try {
-			order = orderService.getForDetails(id);
-		} catch (Exception ex) {
-			log.warn("Delete order: order not found for id={}", id);
-		}
+	    Order order = null;
+	    try {
+	        order = orderService.getForDetails(id);
+	    } catch (Exception ex) {
+	        log.warn("Delete order: order not found for id={}", id);
+	    }
 
-		orderService.delete(id);
+	    String salesOrderId = (order != null ? order.getSalesOrderId() : null);
 
-		String salesOrderId = (order != null ? order.getSalesOrderId() : null);
-		String actorIp = IpUtils.getClientIp(request);
+	    try {
+	        // ✅ this will throw BusinessException if invoices exist
+	        orderService.delete(id);
 
-		auditService.logEvent("ORDER", id, salesOrderId, "DELETE",
-				"Deleted order " + (salesOrderId != null ? salesOrderId : ("id=" + id)), null,
-				me != null ? me.getUser() : null, actorIp);
+	        // ✅ audit only on success
+	        auditService.logEvent("ORDER", id, salesOrderId, "DELETE",
+	                "Deleted order " + (salesOrderId != null ? salesOrderId : ("id=" + id)),
+	                null, me != null ? me.getUser() : null);
 
-		redirectAttrs.addFlashAttribute("message", "Order deleted.");
-		log.info("Order deleted: id={}, salesOrderId={}", id, salesOrderId);
-		return "redirect:/orders";
+	        redirectAttrs.addFlashAttribute("message", "Order deleted.");
+	        log.info("Order deleted: id={}, salesOrderId={}", id, salesOrderId);
+
+	    } catch (BusinessException ex) {
+	        redirectAttrs.addFlashAttribute("error", ex.getMessage());
+	        log.warn("Order delete blocked: id={}, reason={}", id, ex.getMessage());
+	    }
+	    return "redirect:/orders";
 	}
 
 	// -------- helpers --------
 	private void supplyFormLookups(Model model, MyUserDetails me) {
 		log.debug("Supply lookups for userId={}", (me != null ? me.getUsername() : null));
-		model.addAttribute("customers", customers.findAll());
+		model.addAttribute("customers", customers.findByActiveTrue());
 		model.addAttribute("salesManagers", users.findAllSalesManagers());
-		model.addAttribute("verticals", verticals.findAll());
+		model.addAttribute("verticals", verticals.findByActiveTrue());
 
 		var all = java.util.EnumSet.allOf(Location.class);
 		var allowed = me.getUser().getRoles().contains(com.sybyl.trace.user.AppRole.ADMIN) ? all
@@ -373,7 +426,7 @@ public class OrderController {
 	}
 
 	@GetMapping("/orders/{orderId}/margin-reports/{mrId}/download")
-	public void downloadMarginReport(@PathVariable Long orderId, @PathVariable Long mrId, HttpServletResponse response)
+	public void downloadMarginReport(@PathVariable Long orderId, @PathVariable Long mrId, HttpServletResponse response, RedirectAttributes ra)
 			throws IOException {
 
 		log.info("Download margin report requested: orderId={}, mrId={}", orderId, mrId);
@@ -408,6 +461,7 @@ public class OrderController {
 			out.flush();
 			log.info("Download completed: orderId={}, mrId={}, bytes={}", orderId, mrId, Files.size(filePath));
 		} catch (IOException ex) {
+			ra.addFlashAttribute("error", "Failed to upload margin report: " + ex.getMessage());
 			log.error("Download failed: orderId={}, mrId={}, path={}", orderId, mrId, filePath, ex);
 			throw ex;
 		}
@@ -418,9 +472,8 @@ public class OrderController {
 			@PathVariable Long mrId, @RequestParam(value = "deleteFile", defaultValue = "true") boolean deleteFile,
 			RedirectAttributes ra, HttpServletRequest request) throws IOException {
 
-		String actorIp = IpUtils.getClientIp(request);
 		try {
-			marginReportService.delete(orderId, mrId, me.getUser(), deleteFile, actorIp);
+			marginReportService.delete(orderId, mrId, me.getUser(), deleteFile);
 			ra.addFlashAttribute("message", "Margin report deleted.");
 		} catch (IllegalStateException ex) {
 			ra.addFlashAttribute("error", ex.getMessage());
@@ -439,10 +492,9 @@ public class OrderController {
 			@RequestParam(required = false) String comments, @RequestParam(required = false) MultipartFile file,
 			RedirectAttributes ra, HttpServletRequest request) {
 
-		String actorIp = IpUtils.getClientIp(request);
 		try {
 			marginReportService.update(orderId, mrId, buyingPrice, buyingCurrency, sellingPrice, sellingCurrency,
-					conversionRate, verticalId, comments, file, me.getUser(), actorIp);
+					conversionRate, verticalId, comments, file, me.getUser());
 
 			ra.addFlashAttribute("message", "Margin report updated.");
 		} catch (IllegalStateException ex) {

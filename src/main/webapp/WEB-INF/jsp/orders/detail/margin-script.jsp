@@ -1,6 +1,6 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8"
     pageEncoding="UTF-8"%>
-
+<%@ taglib prefix="fn" uri="http://java.sun.com/jsp/jstl/functions"%>
 
 <!-- Global helpers / constants -->
 <script>
@@ -47,26 +47,26 @@
   }
 
   function showMrCreateError(msg) {
-	  var $a = $('#mrCreateErrorAlert');
-	  var $t = $('#mrCreateErrorText');
-	  if ($t.length) $t.text(msg);
-	  if ($a.length) $a.removeClass('d-none').show();
-	}
+    var $a = $('#mrCreateErrorAlert');
+    var $t = $('#mrCreateErrorText');
+    if ($t.length) $t.text(msg);
+    if ($a.length) $a.removeClass('d-none').show();
+  }
 
-	function clearMrCreateError() {
-	  $('#mrCreateErrorAlert').addClass('d-none').hide();
-	  $('#mrCreateErrorText').text('');
-	}
+  function clearMrCreateError() {
+    $('#mrCreateErrorAlert').addClass('d-none').hide();
+    $('#mrCreateErrorText').text('');
+  }
 
-	function parseMoneyStrict(raw) {
-	  // allow: 123, 123.45, 1,234.56 (commas removed)
-	  var s = (raw || '').toString().trim().replace(/,/g, '');
-	  if (s === '') return { ok:false, reason:'required' };
-	  if (!/^\d+(\.\d{1,6})?$/.test(s)) return { ok:false, reason:'format' };
-	  var n = Number(s);
-	  if (!isFinite(n)) return { ok:false, reason:'format' };
-	  return { ok:true, value:n };
-	}
+  function parseMoneyStrict(raw) {
+    // allow: 123, 123.45, 1,234.56 (commas removed)
+    var s = (raw || '').toString().trim().replace(/,/g, '');
+    if (s === '') return { ok:false, reason:'required' };
+    if (!/^\d+(\.\d{1,6})?$/.test(s)) return { ok:false, reason:'format' };
+    var n = Number(s);
+    if (!isFinite(n)) return { ok:false, reason:'format' };
+    return { ok:true, value:n };
+  }
 
   function isValidPair(buy, sell) {
     return buy && sell && (buy === sell || buy === 'USD' || sell === 'USD');
@@ -101,33 +101,26 @@
     wireMrEditNoChangeDisable();
     console.log('[MR-EDIT] action set ->', actionUrl);
   }
+
   function wireMrEditNoChangeDisable() {
-	  var $form = $('#mrEditForm');
-	  if (!$form.length) return;
+    var $form = $('#mrEditForm');
+    if (!$form.length) return;
 
-	  // enable submit temporarily while taking snapshot
-	  var $submit = $form.find('button[type="submit"]');
+    var $submit = $form.find('button[type="submit"]');
+    var original = $form.serialize();
 
-	  // snapshot AFTER values are populated
-	  var original = $form.serialize();
+    $submit.prop('disabled', true);
+    $form.off('.mrChanged');
 
-	  // default: disabled until something changes
-	  $submit.prop('disabled', true);
+    $form.on('change.mrChanged keyup.mrChanged', 'input, select, textarea', function () {
+      var changed = $form.serialize() !== original;
+      $submit.prop('disabled', !changed);
+    });
 
-	  // avoid double-binding if modal opened multiple times
-	  $form.off('.mrChanged');
-
-	  $form.on('change.mrChanged keyup.mrChanged', 'input, select, textarea', function () {
-	    var changed = $form.serialize() !== original;
-	    $submit.prop('disabled', !changed);
-	  });
-
-	  // if you also want file change to enable submit (file input not in serialize)
-	  $form.on('change.mrChanged', 'input[type="file"]', function () {
-	    $submit.prop('disabled', false);
-	  });
-	}
-
+    $form.on('change.mrChanged', 'input[type="file"]', function () {
+      $submit.prop('disabled', false);
+    });
+  }
 
   $(function () {
     // ---- File label ----
@@ -157,57 +150,51 @@
         }
       }
     });
+
     $('#mrModal form').on('submit', function(e) {
-    	  clearMrCreateError();
+      clearMrCreateError();
 
-    	  var scope = document.getElementById('mrModal');
-    	  var buyEl  = scope.querySelector('input[name="buyingPrice"]');
-    	  var sellEl = scope.querySelector('input[name="sellingPrice"]');
-    	  var fxEl   = scope.querySelector('input[name="conversionRate"]');
+      var scope = document.getElementById('mrModal');
+      var buyEl  = scope.querySelector('input[name="buyingPrice"]');
+      var sellEl = scope.querySelector('input[name="sellingPrice"]');
+      var fxEl   = scope.querySelector('input[name="conversionRate"]');
 
-    	  // reset field UI
-    	  [buyEl, sellEl, fxEl].forEach(function(el){
-    	    if (!el) return;
-    	    el.classList.remove('is-invalid');
-    	  });
+      [buyEl, sellEl, fxEl].forEach(function(el){
+        if (!el) return;
+        el.classList.remove('is-invalid');
+      });
 
-    	  // strict numeric validation
-    	  var buy  = parseMoneyStrict(buyEl.value);
-    	  var sell = parseMoneyStrict(sellEl.value);
+      var buy  = parseMoneyStrict(buyEl.value);
+      var sell = parseMoneyStrict(sellEl.value);
 
-    	  if (!buy.ok) {
-    	    buyEl.classList.add('is-invalid');
-    	    showMrCreateError('Buying price must be a valid number (e.g. 1200 or 1200.50).');
-    	    buyEl.focus();
-    	    e.preventDefault(); return false;
-    	  }
-    	  if (!sell.ok) {
-    	    sellEl.classList.add('is-invalid');
-    	    showMrCreateError('Selling price must be a valid number (e.g. 1500 or 1500.50).');
-    	    sellEl.focus();
-    	    e.preventDefault(); return false;
-    	  }
+      if (!buy.ok) {
+        buyEl.classList.add('is-invalid');
+        showMrCreateError('Buying price must be a valid number (e.g. 1200 or 1200.50).');
+        buyEl.focus();
+        e.preventDefault(); return false;
+      }
+      if (!sell.ok) {
+        sellEl.classList.add('is-invalid');
+        showMrCreateError('Selling price must be a valid number (e.g. 1500 or 1500.50).');
+        sellEl.focus();
+        e.preventDefault(); return false;
+      }
 
-    	  // normalize to 2dp AFTER validation
-    	  buyEl.value  = buy.value.toFixed(2);
-    	  sellEl.value = sell.value.toFixed(2);
+      buyEl.value  = buy.value.toFixed(2);
+      sellEl.value = sell.value.toFixed(2);
 
-    	  // conversion rate (6dp) - validate too
-    	  var fx = parseMoneyStrict(fxEl.value);
-    	  if (!fx.ok || fx.value <= 0) {
-    	    fxEl.classList.add('is-invalid');
-    	    showMrCreateError('Conversion rate must be a valid number greater than 0.');
-    	    fxEl.focus();
-    	    e.preventDefault(); return false;
-    	  }
-    	  fxEl.value = fx.value.toFixed(6);
+      var fx = parseMoneyStrict(fxEl.value);
+      if (!fx.ok || fx.value <= 0) {
+        fxEl.classList.add('is-invalid');
+        showMrCreateError('Conversion rate must be a valid number greater than 0.');
+        fxEl.focus();
+        e.preventDefault(); return false;
+      }
+      fxEl.value = fx.value.toFixed(6);
 
-    	  // keep your existing currency pair validation
-    	  if (!validateCurrencyPairOrBlock(this)) { e.preventDefault(); return false; }
-
-    	  return true;
-    	});
-
+      if (!validateCurrencyPairOrBlock(this)) { e.preventDefault(); return false; }
+      return true;
+    });
 
     // ---- Edit modal: set action + populate ----
     $(document).on('show.bs.modal', '#mrEditModal', function (e) {
@@ -219,12 +206,10 @@
       fillEditFormFromBtn($btn);
     });
 
-    // Fallback: also on click of the Edit button
     $(document).on('click', 'button[data-target="#mrEditModal"]', function(){
       fillEditFormFromBtn($(this));
     });
 
-    // ---- Edit form: safety + validate ----
     $(document).on('submit', '#mrEditForm', function(e){
       if (!this.action || !/\/orders\/\d+\/margin-reports\/\d+\/update$/.test(this.action)) {
         e.preventDefault();
@@ -269,7 +254,6 @@
 (function(){
   function waitForJQ(fn){ if (typeof window.jQuery==='undefined') return setTimeout(()=>waitForJQ(fn),50); fn(); }
   waitForJQ(function(){
-    // Load audit into modal
     $('#expAuditModal').on('show.bs.modal', function(e){
       var btn = $(e.relatedTarget);
       var url = btn && btn.data('audit-url');
@@ -280,62 +264,24 @@
         .then(r=>r.text()).then(html=> body.html(html))
         .catch(()=> body.html('<div class="text-danger">Failed to load audit.</div>'));
     });
-
   });
 })();
 </script>
 
 <script>
 (function(){
-  // Edit modal: fill fields & set action
-$('#expEditModal').on('show.bs.modal', function (e) {
-  var btn = $(e.relatedTarget);
-  var id  = btn.data('expid');
-
-  $('#expEditForm').attr('action',
-    '${pageContext.request.contextPath}/orders/${order.id}/expenses/' + id + '/update');
-
-  $('#expEditLabel').val(btn.data('labelid'));
-  $('#expEditAmount').val(btn.data('amount'));
-  $('#expEditCurrency').val(btn.data('currency'));
-  $('#expEditRate').val(btn.data('rate'));
-  $('#expEditComments').val(btn.data('comments'));
-
-  var currentVerticalId = String(btn.data('verticalid') || '');
-  var $sel = $('#expEditVertical');
-
-  $sel.html('<option value="">Loading...</option>');
-
-  fetch('${pageContext.request.contextPath}/orders/${order.id}/expenses/' + id + '/verticals', {
-    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-  })
-  .then(r => r.ok ? r.json() : [])
-  .then(items => {
-    var html = '<option value="">Select</option>';
-    items.forEach(v => {
-      html += '<option value="' + v.id + '">' + (v.name || ('Vertical ' + v.id)) + '</option>';
-    });
-    $sel.html(html);
-
-    // set current after options exist
-    if (currentVerticalId) $sel.val(currentVerticalId);
-  })
-  .catch(() => {
-    $sel.html('<option value="">Failed to load</option>');
-  });
-});
 
 
   $(function () {
-	  $(document).on('show.bs.modal', '#expDeleteModal', function (e) {
-	    var btn = $(e.relatedTarget);
-	    var id  = btn.data('expid');
+    $(document).on('show.bs.modal', '#expDeleteModal', function (e) {
+      var btn = $(e.relatedTarget);
+      var id  = btn.data('expid');
 
-	    $('#expDeleteForm').attr('action',
-	      '${pageContext.request.contextPath}/orders/${order.id}/expenses/' + id + '/delete'
-	    );
-	  });
-	});
+      $('#expDeleteForm').attr('action',
+        '${pageContext.request.contextPath}/orders/${order.id}/expenses/' + id + '/delete'
+      );
+    });
+  });
 
 })();
 </script>
@@ -360,7 +306,7 @@ $(function () {
       if (!val) return;
       const n = Number(val);
       if (isNaN(n)) return;
-      $rate.val(n.toFixed(2));  // always 2 decimals
+      $rate.val(n.toFixed(2));
     }
 
     function updateConversionRateState() {
@@ -390,8 +336,8 @@ $(function () {
     updateConversionRateState();
   }
 
-  wireMarginModal('#mrModal');      // create margin report
-  wireMarginModal('#mrEditModal');  // update margin report
+  wireMarginModal('#mrModal');
+  wireMarginModal('#mrEditModal');
 
 });
 </script>
@@ -415,7 +361,7 @@ $(function () {
       if (!val) return;
       const n = Number(val);
       if (isNaN(n)) return;
-      $rate.val(n.toFixed(2));  // force 2 decimals
+      $rate.val(n.toFixed(2));
     }
 
     function updateRateState() {
@@ -443,8 +389,8 @@ $(function () {
     updateRateState();
   }
 
-  wireAdditionalExpenseModal('#expCreateModal');   // add
-  wireAdditionalExpenseModal('#expEditModal');     // edit
+  wireAdditionalExpenseModal('#expCreateModal');
+  wireAdditionalExpenseModal('#expEditModal');
 
 });
 </script>
@@ -501,22 +447,19 @@ $(function () {
 <!-- Expense reject + MR delete modals -->
 <script>
 $('#expenseRejectModal').on('show.bs.modal', function (e) {
-    const btn = $(e.relatedTarget);
-    const expId = btn.data('expid');
+  const btn = $(e.relatedTarget);
+  const expId = btn.data('expid');
 
-    $('#expenseRejectForm').attr('action',
-        '${pageContext.request.contextPath}/orders/${order.id}/expenses/' + expId + '/reject');
+  $('#expenseRejectForm').attr('action',
+    '${pageContext.request.contextPath}/orders/${order.id}/expenses/' + expId + '/reject');
 });
 
-// Margin Report delete modal
 $('#mrDeleteModal').on('show.bs.modal', function (e) {
   const btn  = $(e.relatedTarget);
   const mrId = btn.data('mrid');
 
-  $('#mrDeleteForm').attr(
-    'action',
-    '${pageContext.request.contextPath}/orders/${order.id}/margin-reports/' + mrId + '/delete'
-  );
+  $('#mrDeleteForm').attr('action',
+    '${pageContext.request.contextPath}/orders/${order.id}/margin-reports/' + mrId + '/delete');
 });
 </script>
 
@@ -525,61 +468,63 @@ $('#mrDeleteModal').on('show.bs.modal', function (e) {
 (function () {
   document.addEventListener('DOMContentLoaded', function () {
     var show = '${showMarginModal}' === 'true';
-    if (show) {
-      $('#mrModal').modal('show');
-    }
+    if (show) $('#mrModal').modal('show');
   });
 })();
 </script>
 
-<!-- Unified Consume (Disburse) modal behaviour with error handling -->
-<%@ taglib prefix="fn" uri="http://java.sun.com/jsp/jstl/functions" %>
-
+<!-- Unified Consume (Disburse) modal behaviour with error handling (RELIABLE) -->
 <script>
 (function() {
-  // From RedirectAttributes (used in JSP)
   const openErrId = '${openConsumeExpenseId}';
   const errMsg    = '${fn:escapeXml(expenseError)}';
 
-  let consumeErrorShownOnce = false;
-
-  // Auto-open the failing expense's modal once after redirect
+  // Auto-open modal after redirect (no click simulation)
   $(function() {
     if (openErrId && openErrId !== 'null' && openErrId !== '') {
-      const $btn = $('button.js-exp-consume[data-expid="' + openErrId + '"]');
-      if ($btn.length) {
-        $btn.trigger('click');
-      }
+      $('#expDisburseModal').modal('show');
     }
   });
 
   $('#expDisburseModal').on('show.bs.modal', function (e) {
-    const btn   = $(e.relatedTarget);
-    const expId = String(btn.data('expid'));
+    // Source button if available
+    let $srcBtn = (e.relatedTarget ? $(e.relatedTarget) : null);
+    if (!$srcBtn || !$srcBtn.length) {
+      // Fallback to the button for openErrId
+      if (openErrId && openErrId !== 'null' && openErrId !== '') {
+        const $fallback = $('button.js-exp-consume[data-expid="' + openErrId + '"]');
+        if ($fallback.length) $srcBtn = $fallback;
+      }
+    }
+    if (!$srcBtn || !$srcBtn.length) {
+      console.warn('[CONSUME] Modal opened but no source button found');
+      return;
+    }
 
-    const expAmount   = parseFloat(btn.data('exp-amount')) || 0;
-    const expCurrency = (btn.data('exp-currency') || '').toString();
-    const expStatus   = (btn.data('exp-status') || '').toString();
-    const expCapUsd   = parseFloat(btn.data('exp-usd')) || 0;
+    const expId = String($srcBtn.data('expid'));
+    if (!expId || expId === 'undefined') return;
 
+    const expAmount   = parseFloat($srcBtn.data('exp-amount')) || 0;
+    const expCurrency = ($srcBtn.data('exp-currency') || '').toString();
+    const expStatus   = ($srcBtn.data('exp-status') || '').toString();
+    const expCapUsd   = parseFloat($srcBtn.data('exp-usd')) || 0;
+
+    // Show error (always) when it belongs to this expense
     const $err     = $('#expConsumeErrorAlert');
     const $errText = $('#expConsumeErrorText');
 
-    if ($err.length) {
-      const hasErrCtx = openErrId && openErrId !== 'null' && openErrId !== '';
-      const sameExp   = expId === String(openErrId);
+    const hasErr = openErrId && openErrId !== 'null' && openErrId !== '' && errMsg;
+    const sameExp = expId === String(openErrId);
 
-      if (hasErrCtx && sameExp && !consumeErrorShownOnce && errMsg) {
-        $errText.text(errMsg);
-        $err.removeClass('d-none').show();
-        consumeErrorShownOnce = true;
-      } else {
-        $err.addClass('d-none').hide();
-        $errText.text('');
-      }
+    if (hasErr && sameExp) {
+      $errText.text(errMsg);
+      $err.removeClass('d-none').show();
+    } else {
+      $err.addClass('d-none').hide();
+      $errText.text('');
     }
 
-    // form action
+    // Set correct form action
     $('#disburseForm').attr('action', baseDisbUrl + expId + '/consume');
 
     // meta bar basics
@@ -594,31 +539,29 @@ $('#mrDeleteModal').on('show.bs.modal', function (e) {
     $('#metaRemainingCur').text('USD');
 
     // load past consumptions
-    const wrap = $('#disbTableWrap').html('<div class="text-muted">Loading...</div>');
-    fetch(baseDisbUrl + expId + '/disbursements', {
-      headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-    .then(r => r.text())
-    .then(html => {
-      wrap.html(html);
+    const $wrap = $('#disbTableWrap').html('<div class="text-muted">Loading...</div>');
+    fetch(baseDisbUrl + expId + '/disbursements', { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
+      .then(r => r.text())
+      .then(html => {
+        $wrap.html(html);
 
-      let total = 0;
-      wrap.find('tr[data-amount]').each(function(){
-        const amt = parseFloat($(this).attr('data-amount')) || 0;
-        total += amt;
-      });
+        let total = 0;
+        $wrap.find('tr[data-amount]').each(function(){
+          const amt = parseFloat($(this).attr('data-amount')) || 0;
+          total += amt;
+        });
 
-      const remaining = Math.max(0, expCapUsd - total);
+        const remaining = Math.max(0, expCapUsd - total);
 
-      $('#metaDisbursed').text(fmt(total));
-      $('#metaDisbursedCur').text('USD');
+        $('#metaDisbursed').text(fmt(total));
+        $('#metaDisbursedCur').text('USD');
 
-      $('#metaRemaining').text(fmt(remaining));
-      $('#metaRemainingCur').text('USD');
-    })
-    .catch(() => wrap.html('<div class="text-danger">Failed to load.</div>'));
+        $('#metaRemaining').text(fmt(remaining));
+        $('#metaRemainingCur').text('USD');
+      })
+      .catch(() => $wrap.html('<div class="text-danger">Failed to load.</div>'));
 
-    // delete consumption handler (unchanged)
+    // delete consumption handler
     $('#disbTableWrap').off('click', '.js-disb-del').on('click', '.js-disb-del', function(){
       const disbId = $(this).data('disbid');
       if (!confirm('Delete this consumption?')) return;
@@ -632,9 +575,7 @@ $('#mrDeleteModal').on('show.bs.modal', function (e) {
       })
       .then(r => {
         if (!r.ok) throw new Error('Delete failed');
-        return fetch(baseDisbUrl + expId + '/disbursements', {
-          headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        });
+        return fetch(baseDisbUrl + expId + '/disbursements', { headers: { 'X-Requested-With': 'XMLHttpRequest' }});
       })
       .then(r => r.text())
       .then(html => {
@@ -664,6 +605,34 @@ $('#mrDeleteModal').on('show.bs.modal', function (e) {
   });
 
 })();
-</script>
 
-</html>
+$(function() {
+    // Margin Report Approvals
+    $(document).on('click', '.js-mr-approve-btn', function() {
+        var btn = $(this);
+        var mrId = btn.data('mrid');
+        var type = btn.data('type');
+        var form = $('#mrApproveForm');
+        var action = ctx + '/orders/' + orderId + '/margin-reports/' + mrId + 
+                     (type === 'finance' ? '/approve-finance' : '/approve-ceo');
+        
+        form.attr('action', action);
+        $('#mrApproveTitle').text('Approve Margin Report (' + type.toUpperCase() + ')');
+        $('#mrApproveModal').modal('show');
+    });
+
+    // Expense Approvals
+    $(document).on('click', '.js-exp-approve-btn', function() {
+        var btn = $(this);
+        var expId = btn.data('expid');
+        var type = btn.data('type');
+        var form = $('#expApproveForm');
+        var action = ctx + '/orders/' + orderId + '/expenses/' + expId +
+                     (type === 'ceo' ? '/approve/ceo' : '/approve/cfo');
+        
+        form.attr('action', action);
+        $('#expApproveTitle').text('Approve Expense (' + type.toUpperCase() + ')');
+        $('#expApproveModal').modal('show');
+    });
+});
+</script>

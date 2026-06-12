@@ -113,14 +113,7 @@ public class NotificationService {
 
     @Transactional
     public void markAllAsRead(AppUser user) {
-        var list = repo.findTop50ByRecipientOrderByCreatedAtDesc(user);
-        int changed = 0;
-        for (Notification n : list) {
-            if (!n.isReadFlag()) {
-                n.setReadFlag(true);
-                changed++;
-            }
-        }
+        int changed = repo.markAllAsReadByRecipient(user);
         log.debug("markAllAsRead: user={}, changed={}", user.getUsername(), changed);
     }
 
@@ -131,5 +124,14 @@ public class NotificationService {
         int deleted = repo.deleteOldReadBefore(cutoff);
         log.info("Cleanup old notifications: days={}, cutoff={}, deleted={}", days, cutoff, deleted);
         return  deleted;
+    }
+    
+    @Transactional(readOnly = true)
+    public Notification getForUser(Long notificationId, AppUser currentUser) {
+        if (currentUser == null) {
+            throw new RuntimeException("User not authenticated.");
+        }
+        return repo.findByIdAndRecipient(notificationId, currentUser)
+                .orElseThrow(() -> new RuntimeException("Notification not found."));
     }
 }

@@ -28,7 +28,6 @@ public class AppAuditController {
     ) {
     	
         log.info("Audit log requested: page={}, size={}, query='{}'", page, size, q);
-        
 
         try {
             Page<AppAuditLog> logsPage = auditService.search(q, page, size);

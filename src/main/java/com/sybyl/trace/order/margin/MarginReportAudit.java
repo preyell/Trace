@@ -40,6 +40,8 @@ public class MarginReportAudit {
   @Column(name = "note", length = 1000)
   private String note;
 
+  @Column(name = "comments", length = 1000)
+  private String comments;
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
   @JoinColumn(name = "margin_report_id", nullable = false,
               foreignKey = @ForeignKey(name = "fk_mra_mr"))

@@ -37,39 +37,41 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 	// ---- Search within one location (now includes salesOrderId) ----
 	@EntityGraph(attributePaths = { "customer", "salesManager", "createdBy", "verticals" })
 	@Query(value = """
-			select distinct o from Order o
-			  left join o.customer c
-			  left join o.salesManager sm
-			  left join o.createdBy cb
-			  left join o.verticals v
-			where o.location = :loc and (
-			       lower(coalesce(o.salesOrderId,''))   like lower(concat('%', :q, '%'))
-			    or lower(coalesce(c.name,''))           like lower(concat('%', :q, '%'))
-			    or lower(coalesce(o.description,''))    like lower(concat('%', :q, '%'))
-			    or lower(coalesce(sm.firstName,''))     like lower(concat('%', :q, '%'))
-			    or lower(coalesce(sm.lastName,''))      like lower(concat('%', :q, '%'))
-			    or lower(coalesce(cb.firstName,''))     like lower(concat('%', :q, '%'))
-			    or lower(coalesce(cb.lastName,''))      like lower(concat('%', :q, '%'))
-			    or lower(coalesce(v.name,''))           like lower(concat('%', :q, '%'))
-			)
-			""", countQuery = """
-			select count(distinct o) from Order o
-			  left join o.customer c
-			  left join o.salesManager sm
-			  left join o.createdBy cb
-			  left join o.verticals v
-			where o.location = :loc and (
-			       lower(coalesce(o.salesOrderId,''))   like lower(concat('%', :q, '%'))
-			    or lower(coalesce(c.name,''))           like lower(concat('%', :q, '%'))
-			    or lower(coalesce(o.description,''))    like lower(concat('%', :q, '%'))
-			    or lower(coalesce(sm.firstName,''))     like lower(concat('%', :q, '%'))
-			    or lower(coalesce(sm.lastName,''))      like lower(concat('%', :q, '%'))
-			    or lower(coalesce(cb.firstName,''))     like lower(concat('%', :q, '%'))
-			    or lower(coalesce(cb.lastName,''))      like lower(concat('%', :q, '%'))
-			    or lower(coalesce(v.name,''))           like lower(concat('%', :q, '%'))
-			)
-			""")
-	Page<Order> searchInLocation(@Param("loc") Location loc, @Param("q") String q, Pageable pageable);
+	select distinct o from Order o
+	  left join o.customer c
+	  left join o.salesManager sm
+	  left join o.createdBy cb
+	  left join o.verticals v
+	where o.location = :loc and (
+	       lower(coalesce(o.salesOrderId,''))   like lower(concat('%', :q, '%'))
+	    or lower(coalesce(c.name,''))           like lower(concat('%', :q, '%'))
+	    or lower(coalesce(o.description,''))    like lower(concat('%', :q, '%'))
+	    or lower(coalesce(sm.firstName,''))     like lower(concat('%', :q, '%'))
+	    or lower(coalesce(sm.lastName,''))      like lower(concat('%', :q, '%'))
+	    or lower(coalesce(cb.firstName,''))     like lower(concat('%', :q, '%'))
+	    or lower(coalesce(cb.lastName,''))      like lower(concat('%', :q, '%'))
+	    or lower(coalesce(v.name,''))           like lower(concat('%', :q, '%'))
+	    or lower(coalesce(str(o.createdAt), '')) like lower(concat('%', :q, '%'))
+	)
+	""", countQuery = """
+	select count(distinct o) from Order o
+	  left join o.customer c
+	  left join o.salesManager sm
+	  left join o.createdBy cb
+	  left join o.verticals v
+	where o.location = :loc and (
+	       lower(coalesce(o.salesOrderId,''))   like lower(concat('%', :q, '%'))
+	    or lower(coalesce(c.name,''))           like lower(concat('%', :q, '%'))
+	    or lower(coalesce(o.description,''))    like lower(concat('%', :q, '%'))
+	    or lower(coalesce(sm.firstName,''))     like lower(concat('%', :q, '%'))
+	    or lower(coalesce(sm.lastName,''))      like lower(concat('%', :q, '%'))
+	    or lower(coalesce(cb.firstName,''))     like lower(concat('%', :q, '%'))
+	    or lower(coalesce(cb.lastName,''))      like lower(concat('%', :q, '%'))
+	    or lower(coalesce(v.name,''))           like lower(concat('%', :q, '%'))
+	    or lower(coalesce(str(o.createdAt), '')) like lower(concat('%', :q, '%'))
+	)
+	""")
+Page<Order> searchInLocation(@Param("loc") Location loc, @Param("q") String q, Pageable pageable);
 
 	// ---- Search across multiple locations (also includes salesOrderId) ----
 	@EntityGraph(attributePaths = { "customer", "salesManager", "createdBy", "verticals" })
@@ -88,24 +90,27 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 			    or lower(coalesce(cb.firstName,''))     like lower(concat('%', :q, '%'))
 			    or lower(coalesce(cb.lastName,''))      like lower(concat('%', :q, '%'))
 			    or lower(coalesce(v.name,''))           like lower(concat('%', :q, '%'))
+			    or lower(coalesce(str(o.createdAt), '')) like lower(concat('%', :q, '%'))
+			    
 			)
 			""", countQuery = """
-			select count(distinct o) from Order o
-			  left join o.customer c
-			  left join o.salesManager sm
-			  left join o.createdBy cb
-			  left join o.verticals v
-			where o.location in :locs and (
-			       lower(coalesce(o.salesOrderId,''))   like lower(concat('%', :q, '%'))
-			    or lower(coalesce(c.name,''))           like lower(concat('%', :q, '%'))
-			    or lower(coalesce(o.description,''))    like lower(concat('%', :q, '%'))
-			    or lower(coalesce(sm.firstName,''))     like lower(concat('%', :q, '%'))
-			    or lower(coalesce(sm.lastName,''))      like lower(concat('%', :q, '%'))
-			    or lower(coalesce(cb.firstName,''))     like lower(concat('%', :q, '%'))
-			    or lower(coalesce(cb.lastName,''))      like lower(concat('%', :q, '%'))
-			    or lower(coalesce(v.name,''))           like lower(concat('%', :q, '%'))
-			)
-			""")
+						select count(distinct o) from Order o
+						  left join o.customer c
+						  left join o.salesManager sm
+						  left join o.createdBy cb
+						  left join o.verticals v
+						where o.location in :locs and (
+						       lower(coalesce(o.salesOrderId,''))   like lower(concat('%', :q, '%'))
+						    or lower(coalesce(c.name,''))           like lower(concat('%', :q, '%'))
+						    or lower(coalesce(o.description,''))    like lower(concat('%', :q, '%'))
+						    or lower(coalesce(sm.firstName,''))     like lower(concat('%', :q, '%'))
+						    or lower(coalesce(sm.lastName,''))      like lower(concat('%', :q, '%'))
+						    or lower(coalesce(cb.firstName,''))     like lower(concat('%', :q, '%'))
+						    or lower(coalesce(cb.lastName,''))      like lower(concat('%', :q, '%'))
+						    or lower(coalesce(v.name,''))           like lower(concat('%', :q, '%'))
+			or lower(coalesce(str(o.createdAt), ''))   like lower(concat('%', :q, '%'))
+						)
+						""")
 	Page<Order> searchInLocations(@Param("locs") Set<Location> locs, @Param("q") String q, Pageable pageable);
 
 	// OrderRepository.java

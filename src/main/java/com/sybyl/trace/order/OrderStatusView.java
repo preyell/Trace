@@ -9,8 +9,8 @@ public enum OrderStatusView {
     MR_APPROVED_NO_EXPENSE("Approved"),
 
     // Additional expense–driven statuses
-    EXP_WAITING("Additional expense: Waiting (Pending CEO approval)"),
-    EXP_CEO_APPROVED("Additional expense: Pending CFO approval"),
+    EXP_CEO_PENDING("Additional expense: Pending CEO approval"),
+    EXP_CFO_PENDING("Additional expense: Pending CFO approval"),
     EXP_CFO_APPROVED("Approved"),
     EXP_REJECTED("Additional expense rejected"),
 

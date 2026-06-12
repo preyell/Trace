@@ -31,7 +31,6 @@
 				<th>User</th>
 				<th>Action / Target</th>
 				<th>Message</th>
-				<th style="white-space: nowrap;">IP</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -40,7 +39,7 @@
 					<!-- Time -->
 					<td style="white-space: nowrap; font-size: 0.85rem;"><fmt:formatDate
 							value="${e.eventTimeDate}" pattern="yyyy-MM-dd HH:mm:ss"
-							timeZone="Africa/Kampala" /></td>
+							timeZone="Africa/Nairobi" /></td>
 
 					<!-- User -->
 					<td style="font-size: 0.85rem;"><strong>${e.actorDisplayName}</strong><br />
@@ -69,9 +68,7 @@
 					<td style="font-size: 0.85rem; max-width: 400px;"><span
 						title="${e.message}"> ${e.message} </span></td>
 
-					<!-- IP -->
-					<td style="white-space: nowrap; font-size: 0.8rem;"><span
-						class="text-monospace text-muted">${e.actorIp}</span></td>
+				
 				</tr>
 			</c:forEach>
 

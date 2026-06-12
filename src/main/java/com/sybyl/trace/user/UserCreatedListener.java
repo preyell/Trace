@@ -29,30 +29,29 @@ public class UserCreatedListener {
 	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
 	public void onUserCreated(UserCreatedEvent e) {
 		try {
-			String link = baseUrl + "/activate?token=" + e.token();
+			
 
 			SimpleMailMessage msg = new SimpleMailMessage();
 			msg.setTo(e.email());
-			msg.setSubject("Activate your Trace account");
+			msg.setSubject("Welcome to Trace application!");
 			msg.setText("""
 					Hi %s,
 
 					Your Trace account has been created.
 
-					To activate and set your password, please click the link below:
+					To login to the application, please click on the link below:
 					%s
 
-					This link expires in 48 hours.
 
 					— Trace Team
-					""".formatted(e.firstName(), link));
+					""".formatted(e.firstName(), baseUrl));
 
 			mailSender.send(msg);
 
-			log.info("Activation email sent: userId={}, email={}", e.userId(), e.email());
+			log.info("Welcome email sent: userId={}, email={}", e.userId(), e.email());
 
 		} catch (Exception ex) {
-			log.error("Activation email failed: userId={}, email={}", e.userId(), e.email(), ex);
+			log.error("Welcome email failed: userId={}, email={}", e.userId(), e.email(), ex);
 
 		}
 	}

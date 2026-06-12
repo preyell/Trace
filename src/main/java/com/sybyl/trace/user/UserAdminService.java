@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.sybyl.trace.audit.AppAuditService;
 import com.sybyl.trace.exception.EmailAlreadyInUseException;
 import com.sybyl.trace.exception.UsernameAlreadyInUseException;
+
 import com.sybyl.trace.location.Location;
 import com.sybyl.trace.masterdata.VerticalRepository;
 import com.sybyl.trace.notification.NotificationRepository;
@@ -28,7 +29,6 @@ public class UserAdminService {
 
     private final AppUserRepository users;
     private final VerticalRepository verticals;
-    private final ActivationService service;
     private final PasswordEncoder encoder;
     private final ApplicationEventPublisher events;
     private final NotificationRepository notificationRepo;
@@ -36,7 +36,6 @@ public class UserAdminService {
 
     public UserAdminService(AppUserRepository users,
                             VerticalRepository verticals,
-                            ActivationService service,
                             PasswordEncoder encoder,
                             ApplicationEventPublisher events,
                             NotificationRepository notificationRepo,
@@ -44,7 +43,6 @@ public class UserAdminService {
         this.users = users;
         this.verticals = verticals;
         this.encoder = encoder;
-        this.service = service;
         this.events = events;
         this.notificationRepo = notificationRepo;
         this.appAuditService = appAuditService;
@@ -62,8 +60,8 @@ public class UserAdminService {
         u.setEmail(req.email().trim());
         u.setFirstName(req.firstName().trim());
         u.setLastName(req.lastName().trim());
-        u.setEnabled(false); // wait until activation
-        u.setPassword(encoder.encode(Tokens.urlSafe(24))); // placeholder hash
+        u.setEnabled(true);
+      //  u.setPassword(encoder.encode(Tokens.urlSafe(24))); // placeholder hash
 
         Set<Location> locations = (req.locations() == null || req.locations().isEmpty())
                 ? EnumSet.noneOf(Location.class)
@@ -81,9 +79,8 @@ public class UserAdminService {
         }
 
         users.save(u);
-        var token = service.createTokenFor(u);
 
-        events.publishEvent(new UserCreatedEvent(u.getId(), u.getEmail(), u.getUsername(), u.getFirstName(), token.getToken()));
+        events.publishEvent(new UserCreatedEvent(u.getId(), u.getEmail(), u.getUsername(), u.getFirstName()));
 
         log.info("User created by admin: userId={}, username={}, email={}", u.getId(), u.getUsername(), u.getEmail());
 
@@ -94,8 +91,8 @@ public class UserAdminService {
             "CREATE",
             "Created user " + u.getUsername() + " (" + u.getEmail() + ")",
             null,
-            null,
             null
+            
         );
     }
 
@@ -133,47 +130,50 @@ public class UserAdminService {
             "UPDATE",
             "Updated user " + u.getUsername(),
             null,
-            null,
             null
+            
         );
     }
+    
 
-    @Transactional
+    @Transactional(readOnly = false)
     public void deleteUser(Long userId) {
         AppUser user = users.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        log.warn("Deleting user: userId={}, username={}", user.getId(), user.getUsername());
-        boolean isSystemAdmin =
-                "admin".equalsIgnoreCase(user.getUsername())
+        log.warn("Evaluating system-wide dependencies for manual deletion directive: userId={}, username={}", user.getId(), user.getUsername());
+        
+        // System Administrator safety block
+        boolean isSystemAdmin = "admin".equalsIgnoreCase(user.getUsername())
                 && user.hasRole(AppRole.ADMIN)
                 && "System Administrator".equalsIgnoreCase((user.getFirstName() + " " + user.getLastName()).trim());
 
         if (isSystemAdmin) {
             throw new IllegalStateException("System Administrator user cannot be deleted.");
         }
-        // Delete notifications first to satisfy FK
-        notificationRepo.deleteByRecipient(user);
 
+        // 1. Proactively check every table for transaction references
+        long globalReferenceCount = users.countAllSystemReferences(userId);
+
+        if (globalReferenceCount > 0) {
+            log.warn("Deletion aborted: User ID {} has {} active transaction records.", userId, globalReferenceCount);
+            
+            // Throw an exception to cleanly halt processing and notify the operator
+            throw new IllegalStateException("This user cannot be deleted because they are referenced in historic transaction data (Orders, Approvals, or Expenses). You can, howerver, disable the user using 'Edit' option.");
+        }
+
+        // 2. Safe Execution Path: Completely clean orphan account
+        notificationRepo.deleteByRecipient(user);
         users.delete(user);
 
         appAuditService.logEvent(
-            "USER",
-            userId,
-            null,
-            "DELETE",
-            "Deleted user " + user.getUsername(),
-            null,
-            null,
-            null
+            "USER", userId, null, "DELETE",
+            "Permanently deleted user " + user.getUsername(),
+            null, null
         );
     }
 
-    public void publishActivationEmail(AppUser u, String token) {
-        events.publishEvent(new UserCreatedEvent(u.getId(), u.getEmail(), u.getUsername(), u.getFirstName(), token));
-        log.info("Activation email re-published: userId={}, username={}", u.getId(), u.getUsername());
 
-    }
 
     public Page<AppUser> search(String q, int page, int size) {
         Pageable pageable = PageRequest.of(Math.max(page,0), Math.max(size,1), Sort.by("username").ascending());
